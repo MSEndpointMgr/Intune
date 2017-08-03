@@ -63,24 +63,33 @@ function Get-MSGraphAuthenticationToken {
             )
             Add-Type -Path $Assemblies -ErrorAction Stop
 
-            # Construct new authentication context
             try {
                 $Authority = "https://login.microsoftonline.com/$($TenantName)/oauth2/token"
                 $ResourceRecipient = "https://graph.microsoft.com"
-                $AuthenticationContext = New-Object -TypeName Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext -ArgumentList $Authority
-                $AuthenticationToken = $AuthenticationContext.AcquireToken($ResourceRecipient, $ClientID, $RedirectUri, "Always")
 
-                # Construct dictionary for authentication header
-                $AuthenticationHeader = $AuthenticationToken.CreateAuthorizationHeader()
+                # Construct new authentication context
+                $AuthenticationContext = New-Object -TypeName "Microsoft.IdentityModel.Clients.ActiveDirectory.AuthenticationContext" -ArgumentList $Authority
 
-                # Construct authentication hash table for holding access token and header information
-                $Authentication = @{
-                    "Token" = $AuthenticationToken.AccessToken
-                    "Header" = @{"Authorization" = $AuthenticationHeader}
+                # Construct platform parameters
+                $PlatformParams = New-Object -TypeName "Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters" -ArgumentList "Always" # Arguments: Auto, Always, Never, RefreshSession
+
+                # Acquire access token
+                $AuthenticationResult = ($AuthenticationContext.AcquireTokenAsync($ResourceRecipient, $ClientID, $RedirectUri, $PlatformParams)).Result
+                
+                # Check if access token was acquired
+                if ($AuthenticationResult.AccessToken -ne $null) {
+                    # Construct authentication hash table for holding access token and header information
+                    $Authentication = @{
+                        "Content-Type" = "application/json"
+                        "Authorization" = -join("Bearer ", $AuthenticationResult.AccessToken)
+                    }
+
+                    # Return the authentication token
+                    return $Authentication                    
                 }
-
-                # Return the authentication token
-                return $Authentication
+                else {
+                    Write-Warning -Message "Failure to acquire access token. Response with access token was null" ; break
+                }
             }
             catch [System.Exception] {
                 Write-Warning -Message "An error occurred when constructing an authentication token: $($_.Exception.Message)" ; break
