@@ -24,6 +24,8 @@ function Get-MSIntuneAuthToken {
 
     Version history:
     1.0.0 - (2017-09-27) Script created
+    1.0.1 - (2017-09-28) N/A - module manifest update
+    1.0.2 - (2017-10-08) Added ExpiresOn property
 
     #>
     [CmdletBinding()]
@@ -81,6 +83,7 @@ function Get-MSIntuneAuthToken {
                     $Authentication = @{
                         "Content-Type" = "application/json"
                         "Authorization" = -join("Bearer ", $AuthenticationResult.AccessToken)
+                        "ExpiresOn" = $AuthenticationResult.ExpiresOn
                     }
 
                     # Return the authentication token
