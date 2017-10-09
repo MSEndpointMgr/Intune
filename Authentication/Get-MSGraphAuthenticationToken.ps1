@@ -19,12 +19,14 @@ function Get-MSGraphAuthenticationToken {
     .NOTES
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
-    Created:     2017-03-20
-    Updated:     2017-08-03
+    Created:     2017-09-27
+    Updated:     2017-09-27
 
     Version history:
-    1.0.0 - (2017-03-20) Script created
-    1.0.1 - (2017-08-04) Added support for detecting the latest Azure AD module, including a check if Azure AD module exists
+    1.0.0 - (2017-09-27) Script created
+    1.0.1 - (2017-09-28) N/A - module manifest update
+    1.0.2 - (2017-10-08) Added ExpiresOn property
+
     #>
     [CmdletBinding()]
     param(
@@ -32,7 +34,7 @@ function Get-MSGraphAuthenticationToken {
         [ValidateNotNullOrEmpty()]
         [string]$TenantName,
 
-        [parameter(Mandatory=$false, HelpMessage="Application ID for an Azure AD application.")]
+        [parameter(Mandatory=$true, HelpMessage="Application ID for an Azure AD application.")]
         [ValidateNotNullOrEmpty()]
         [string]$ClientID,
 
@@ -41,10 +43,9 @@ function Get-MSGraphAuthenticationToken {
         [string]$RedirectUri = "urn:ietf:wg:oauth:2.0:oob"
     )
 
-    # Load assemblies
     try {
         # Get installed Azure AD modules
-        $AzureADModules = Get-InstalledModule -Name "AzureAD"
+        $AzureADModules = Get-InstalledModule -Name "AzureAD" -ErrorAction Stop -Verbose:$false
 
         if ($AzureADModules -ne $null) {
             # Check if multiple modules exist and determine the module path for the most current version
@@ -82,6 +83,7 @@ function Get-MSGraphAuthenticationToken {
                     $Authentication = @{
                         "Content-Type" = "application/json"
                         "Authorization" = -join("Bearer ", $AuthenticationResult.AccessToken)
+                        "ExpiresOn" = $AuthenticationResult.ExpiresOn
                     }
 
                     # Return the authentication token
