@@ -67,20 +67,20 @@ Begin {
     # Determine if the PSIntuneAuth module needs to be installed or updated
     try {
         Write-Verbose -Message "Attempting to locate PSIntuneAuth module"
-        $PSIntuneAuthModule = Get-InstalledModule -Name PSIntuneAuth -ErrorAction Stop
+        $PSIntuneAuthModule = Get-InstalledModule -Name PSIntuneAuth -ErrorAction Stop -Verbose:$false
         if ($PSIntuneAuthModule -ne $null) {
             Write-Verbose -Message "Authentication module detected, checking for latest version"
             $LatestModuleVersion = (Find-Module -Name PSIntuneAuth -ErrorAction Stop -Verbose:$false).Version
             if ($LatestModuleVersion -gt $PSIntuneAuthModule.Version) {
                 Write-Verbose -Message "Latest version of PSIntuneAuth module is not installed, attempting to install: $($LatestModuleVersion.ToString())"
-                $UpdateModuleInvocation = Update-Module -Name PSIntuneAuth -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false
+                $UpdateModuleInvocation = Update-Module -Name PSIntuneAuth -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
             }
         }
     }
     catch [System.Exception] {
         Write-Warning -Message "Unable to detect PSIntuneAuth module, attempting to install from PSGallery"
         try {
-            Install-Module -Name PSIntuneAuth -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false
+            Install-Module -Name PSIntuneAuth -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
             Write-Verbose -Message "Successfully installed PSIntuneAuth"
         }
         catch [System.Exception] {
