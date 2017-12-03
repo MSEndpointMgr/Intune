@@ -439,7 +439,7 @@ function InitiateDownloads {
 	
 	global:Write-CMLogEntry -Value "======== Starting Download Processes ========" -Severity 1
 	global:Write-CMLogEntry -Value "Info: Operating System specified: Windows $($WindowsVersion)" -Severity 1
-	global:Write-CMLogEntry -Value "Info: Operating System architecture specified: $($Architecture)" -Severity 1
+	global:Write-CMLogEntry -Value "Info: Operating System architecture specified: $($OSArchitecture)" -Severity 1
 	
 	# Operating System Version
 	$OperatingSystem = ("Windows " + $($WindowsVersion))
