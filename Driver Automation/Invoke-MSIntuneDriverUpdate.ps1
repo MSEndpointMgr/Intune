@@ -7,7 +7,7 @@
 .DESCRIPTION
 
     This script will determine the model of the computer, manufacturer and operating system used then download,
-    extract Q install the latest driver package from the manufacturer. At present Dell, HP and Lenovo devices
+    extract & install the latest driver package from the manufacturer. At present Dell, HP and Lenovo devices
     are supported.
 	
 .NOTES
