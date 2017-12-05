@@ -17,11 +17,12 @@
     Author:      Maurice Daly
     Contact:     @MoDaly_IT
     Created:     2017-12-03
-    Updated:     2017-12-03
+    Updated:     2017-12-05
 
     Version history:
 
     1.0.0 - (2017-12-03) Script created
+	1.0.1 - (2017-12-05) Updated Lenovo matching SKU value and added regex matching for Computer Model values
 #>
 
 # // =================== GLOBAL VARIABLES ====================== //
@@ -138,11 +139,6 @@ $global:LenovoSystemSKU = $null
 
 # // =================== COMMON VARIABLES ================ //
 
-# ArrayList to store models in
-$DellProducts = New-Object -TypeName System.Collections.ArrayList
-$HPProducts = New-Object -TypeName System.Collections.ArrayList
-$global:LenovoProducts = New-Object -TypeName System.Collections.ArrayList
-
 # Determine manufacturer
 $ComputerManufacturer = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Manufacturer).Trim()
 Write-CMLogEntry -Value "Manufacturer determined as: $($ComputerManufacturer)" -Severity 1
@@ -167,7 +163,7 @@ switch -Wildcard ($ComputerManufacturer) {
 	"*Lenovo*" {
 		$ComputerManufacturer = "Lenovo"
 		$ComputerModel = Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Version
-		$SystemSKU = ((Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).SubString(0, 4)).Trim()
+		$SystemSKU = ((Get-CIMInstance -ClassName MS_SystemInformation -NameSpace root\WMI | Select-Object -ExpandProperty BIOSVersion).SubString(0, 4)).Trim()
 	}
 }
 Write-CMLogEntry -Value "Computer model determined as: $($ComputerModel)" -Severity 1
@@ -504,7 +500,7 @@ function InitiateDownloads {
 		}
 		$DriverRevision = (($DriverCab).Split("-")[2]).Trim(".cab")
 		$DellSystemSKU = ($DellModelCabFiles.supportedsystems.brand.model | Where-Object {
-				$_.Name -eq $ComputerModel
+				$_.Name -match ("^" + $ComputerModel + "$")
 			} | Get-Unique).systemID
 		if ($DellSystemSKU.count -gt 1) {
 			$DellSystemSKU = [string]($DellSystemSKU -join ";")
@@ -526,18 +522,23 @@ function InitiateDownloads {
 		}
 		else {
 			$HPSoftPaqSummary = $global:HPModelSoftPaqs | Where-Object {
-				($_.SystemName -like "*$ComputerModel*") -and ($_.OSName -like "$OSName*$OSArchitecture*$OSBuild*")
+				($_.SystemName -match ("^" + $ComputerModel + "$")) -and ($_.OSName -like "$OSName*$OSArchitecture*$OSBuild*")
 			} | Sort-Object -Descending | select -First 1
 		}
-		$HPSoftPaq = $HPSoftPaqSummary.SoftPaqID
-		$HPSoftPaqDetails = $global:HPModelXML.newdataset.hpclientdriverpackcatalog.softpaqlist.softpaq | Where-Object {
-			$_.ID -eq "$HPSoftPaq"
+		if ($HPSoftPaqSummary -ne $null) {
+			$HPSoftPaq = $HPSoftPaqSummary.SoftPaqID
+			$HPSoftPaqDetails = $global:HPModelXML.newdataset.hpclientdriverpackcatalog.softpaqlist.softpaq | Where-Object {
+				$_.ID -eq "$HPSoftPaq"
+			}
+			$ComputerModelURL = $HPSoftPaqDetails.URL
+			# Replace FTP for HTTP for Bits Transfer Job
+			$DriverDownload = ($HPSoftPaqDetails.URL).TrimStart("ftp:")
+			$DriverCab = $ComputerModelURL | Split-Path -Leaf
+			$DriverRevision = "$($HPSoftPaqDetails.Version)"
 		}
-		$ComputerModelURL = $HPSoftPaqDetails.URL
-		# Replace FTP for HTTP for Bits Transfer Job
-		$DriverDownload = ($HPSoftPaqDetails.URL).TrimStart("ftp:")
-		$DriverCab = $ComputerModelURL | Split-Path -Leaf
-		$DriverRevision = "$($HPSoftPaqDetails.Version)"
+		else{
+			Write-CMLogEntry -Value "Unsupported model / operating system combination found. Exiting." -Severity 3; exit 1
+		}
 	}
 	if ($ComputerManufacturer -eq "Lenovo") {
 		global:Write-CMLogEntry -Value "Info: Setting Lenovo variables" -Severity 1
@@ -558,7 +559,7 @@ function InitiateDownloads {
 			}
 			else {
 				$ComputerModelURL = (($global:LenovoModelDrivers.Product | Where-Object {
-							($_.Queries.Version -like "*ComputerModel*" -and $_.OS -match $WindowsVersion)
+							($_.Queries.Version -match ("^" + $ComputerModel + "$") -and $_.OS -match $WindowsVersion)
 						}).driverPack | Where-Object {
 						$_.id -eq "SCCM"
 					})."#text"
