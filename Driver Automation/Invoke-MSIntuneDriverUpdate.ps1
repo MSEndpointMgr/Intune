@@ -22,7 +22,8 @@
     Version history:
 
     1.0.0 - (2017-12-03) Script created
-	1.0.1 - (2017-12-05) Updated Lenovo matching SKU value and added regex matching for Computer Model values
+	1.0.1 - (2017-12-05) Updated Lenovo matching SKU value and added regex matching for Computer Model values. 
+	1.0.2 - (2017-12-05) Updated to cater for language differences in OS architecture returned
 #>
 
 # // =================== GLOBAL VARIABLES ====================== //
@@ -186,7 +187,16 @@ switch -wildcard (Get-WmiObject -Class Win32_OperatingSystem | Select-Object -Ex
 }
 Write-CMLogEntry -Value "Operating system determined as: $OSName" -Severity 1
 
-$OSArchitecture = (Get-CimInstance Win32_operatingsystem).OSArchitecture
+# Get operating system architecture
+switch -wildcard ((Get-CimInstance Win32_operatingsystem).OSArchitecture) {
+	"64-*" {
+		$OSArchitecture = "64-Bit"
+	}
+	"32-*" {
+		$OSArchitecture = "32-Bit"
+	}
+}
+
 Write-CMLogEntry -Value "Architecture determined as: $OSArchitecture" -Severity 1
 
 $WindowsVersion = ($OSName).Split(" ")[1]
