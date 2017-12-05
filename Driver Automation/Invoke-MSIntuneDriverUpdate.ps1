@@ -522,7 +522,7 @@ function InitiateDownloads {
 		}
 		else {
 			$HPSoftPaqSummary = $global:HPModelSoftPaqs | Where-Object {
-				($_.SystemName -match ("^" + $ComputerModel + "$")) -and ($_.OSName -like "$OSName*$OSArchitecture*$OSBuild*")
+				($_.SystemName -match $ComputerModel) -and ($_.OSName -like "$OSName*$OSArchitecture*$OSBuild*")
 			} | Sort-Object -Descending | select -First 1
 		}
 		if ($HPSoftPaqSummary -ne $null) {
