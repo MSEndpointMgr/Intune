@@ -721,7 +721,16 @@ function Update-Drivers {
 	try {
 		if ((Get-ChildItem -Path $DriverPackagePath -Filter *.inf -Recurse).count -gt 0) {
 			try {
-				Start-Process "$env:WINDIR\sysnative\windowspowershell\v1.0\powershell.exe" -WorkingDirectory $DriverPackagePath -ArgumentList "pnputil /add-driver *.inf /subdirs /install | Out-File -FilePath (Join-Path $LogDirectory '\Install-Drivers.txt') -Append" -NoNewWindow -Wait
+				#Added if clause below 20180121 by @danielolsson100 to support PowerShell x64 shell standalone (to be used with or without Intune)
+                		if($env:PROCESSOR_ARCHITECTURE -eq "x86"){
+                    			Start-Process "$env:WINDIR\sysnative\windowspowershell\v1.0\powershell.exe" -WorkingDirectory $DriverPackagePath -ArgumentList "pnputil /add-driver *.inf /subdirs /install | Out-File -FilePath (Join-Path $LogDirectory '\Install-Drivers.txt') -Append" -NoNewWindow -Wait
+					}
+                		elseif($env:PROCESSOR_ARCHITECTURE -eq "AMD64"){
+                    			Start-Process "powershell.exe" -WorkingDirectory $DriverPackagePath -ArgumentList "pnputil /add-driver *.inf /subdirs /install | Out-File -FilePath (Join-Path $LogDirectory '\Install-Drivers.txt') -Append" -NoNewWindow -Wait
+                		}
+                		else{
+                    			Write-CMLogEntry -Value "Unsupported Processor Architecture: $env:PROCESSOR_ARCHITECTURE" -Severity 3; exit 1
+                		}
 				Write-CMLogEntry -Value "Driver installation complete. Restart required" -Severity 1
 			}
 			catch [System.Exception]
