@@ -18,7 +18,7 @@
     .\Get-StoreAppInformation.ps1 -Store iTunes -AppName "Microsoft Word" -Limit 1
 
 .NOTES
-    FileName: Get-StoreAppInformation.ps1
+    FileName:    Get-StoreAppInformation.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2015-08-19
