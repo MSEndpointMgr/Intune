@@ -1,21 +1,32 @@
 ﻿<#
 .SYNOPSIS
     Search the iTunes or Google Play stores for the app links
+
 .DESCRIPTION
     This script can search for any app available in either iTunes or Google Play store
+
 .PARAMETER Store
     Specify which Store to search within
+
 .PARAMETER AppName
     Specify the app name to search for within the Store
+
 .PARAMETER Limit
     Limit search results to the specified number (only valid for iTunes Store)
+
 .EXAMPLE
     .\Get-StoreAppInformation.ps1 -Store iTunes -AppName "Microsoft Word" -Limit 1
+
 .NOTES
-    Script name: Get-StoreAppInformation.ps1
+    FileName: Get-StoreAppInformation.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
-    DateCreated: 2015-08-19
+    Created:     2015-08-19
+    Updated:     2019-05-14
+
+    Version history:
+    1.0.0 - (2015-08-19) Script created    
+    1.0.1 - (2019-05-14) Added BundleId property returned from store search
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
@@ -23,10 +34,12 @@ param(
     [ValidateNotNullOrEmpty()]
     [ValidateSet("iTunes","GooglePlay")]
     [string]$Store,
+
     [parameter(Mandatory=$true, HelpMessage="Specify the app name to search for within the Store")]
     [ValidateNotNullOrEmpty()]
     [ValidatePattern("^[A-Za-z\s]*$")]
     [string]$AppName,
+
     [parameter(Mandatory=$false, HelpMessage="Limit search results to the specified number (only valid for iTunes Store)")]
     [ValidateNotNullOrEmpty()]
     [string]$Limit = "1"
@@ -57,6 +70,7 @@ Process {
                     $PSObject = [PSCustomObject]@{
                         "AppName" = $Object.trackCensoredName
                         "StoreLink" = $Object.trackViewUrl
+                        "BundleId" = $Object.bundleId
                     }
                     Write-Output -InputObject $PSObject
                 }
@@ -70,6 +84,7 @@ Process {
                     $PSObject = [PSCustomObject]@{
                         "AppName" = $Object.innerText
                         "StoreLink" = "https://play.google.com" + $Object.href
+                        "BundleId" = ($Object.href).Split("=")[1]
                     }
                     Write-Output -InputObject $PSObject
                 }
