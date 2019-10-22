@@ -5,11 +5,14 @@
 .DESCRIPTION
 
 
-.PARAMETER Param
-    Param description.
+.PARAMETER TenantName
+    Specify the tenant name, e.g. domain.onmicrosoft.com.
 
-.PARAMETER ShowProgress
-    Show a progressbar displaying the current operation.
+.PARAMETER ApplicationID
+    Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration.
+
+.PARAMETER PromptBehavior
+    Set the prompt behavior when acquiring a token.
 
 .EXAMPLE
     
@@ -18,24 +21,30 @@
     FileName:    <script name>.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
-    Created:     2017-07-25
-    Updated:     2017-07-25
+    Created:     2019-10-01
+    Updated:     2019-10-01
     
     Version history:
-    1.0.0 - (2017-07-25) Script created
+    1.0.0 - (2019-10-01) Script created
 
     Required modules:
-    AzureAD (Install-Module -Name AzureAD)        
+    AzureAD (Install-Module -Name AzureAD)
+    PSIntuneAuth (Install-Module -Name PSIntuneAuth)
 #>
-[CmdletBinding(SupportsShouldProcess=$true)]
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [parameter(Mandatory=$true, HelpMessage="Specify the tenant name, e.g. domain.onmicrosoft.com.")]
+    [parameter(Mandatory = $true, HelpMessage = "Specify the tenant name, e.g. domain.onmicrosoft.com.")]
     [ValidateNotNullOrEmpty()]
     [string]$TenantName,
 
-    [parameter(Mandatory=$false, HelpMessage="Specify the Application ID of the app registration in Azure AD. When no parameter is manually passed, script will attempt to use well known Microsoft Intune PowerShell app registration.")]
+    [parameter(Mandatory = $false, HelpMessage = "Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration.")]
     [ValidateNotNullOrEmpty()]
-    [string]$ApplicationID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547"    
+    [string]$ApplicationID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",
+
+    [parameter(Mandatory=$false, HelpMessage="Set the prompt behavior when acquiring a token.")]
+    [ValidateNotNullOrEmpty()]
+    [ValidateSet("Auto", "Always", "Never", "RefreshSession")]
+    [string]$PromptBehavior = "Auto"
 )
 Begin {
     # Determine if the PSIntuneAuth module needs to be installed
@@ -54,6 +63,10 @@ Begin {
     catch [System.Exception] {
         Write-Warning -Message "Unable to detect PSIntuneAuth module, attempting to install from PSGallery"
         try {
+            # Install NuGet package provider
+            $PackageProvider = Install-PackageProvider -Name NuGet -Force -Verbose:$false
+
+            # Install PSIntuneAuth module
             Install-Module -Name PSIntuneAuth -Scope AllUsers -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
             Write-Verbose -Message "Successfully installed PSIntuneAuth"
         }
@@ -70,17 +83,72 @@ Begin {
         Write-Verbose -Message "Current authentication token expires in (minutes): $($TokenExpireMins)"
         if ($TokenExpireMins -le 0) {
             Write-Verbose -Message "Existing token found but has expired, requesting a new token"
-            $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID
+            $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID -PromptBehavior $PromptBehavior
         }
         else {
-            Write-Verbose -Message "Existing authentication token has not expired, will not request a new token"
+            if ($PromptBehavior -like "Always") {
+                Write-Verbose -Message "Existing authentication token has not expired but prompt behavior was set to always ask for authentication, requesting a new token"
+                $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID -PromptBehavior $PromptBehavior
+            }
+            else {
+                Write-Verbose -Message "Existing authentication token has not expired, will not request a new token"
+            }
         }
     }
     else {
         Write-Verbose -Message "Authentication token does not exist, requesting a new token"
-        $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID
+        $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID -PromptBehavior $PromptBehavior
     }
 }
 Process {
+    # Functions
+    function Get-ErrorResponseBody {
+        param(   
+            [parameter(Mandatory = $true)]
+            [ValidateNotNullOrEmpty()]
+            [System.Exception]$Exception
+        )
+
+        # Read the error stream
+        $ErrorResponseStream = $Exception.Response.GetResponseStream()
+        $StreamReader = New-Object System.IO.StreamReader($ErrorResponseStream)
+        $StreamReader.BaseStream.Position = 0
+        $StreamReader.DiscardBufferedData()
+        $ResponseBody = $StreamReader.ReadToEnd()
+
+        # Handle return object
+        return $ResponseBody
+    }
+
+    # Construct Graph variables
+    $GraphVersion = "beta"
+    $GraphResource = ""
+    $GraphURI = "https://graph.microsoft.com/$($GraphVersion)/$($GraphResource)"
+
+    #
     # Main code
+    #
+
+    try {
+        #
+        # Select either the POST or GET method below depending on purpose of the script
+        #
+
+        # Call Graph API and post JSON response
+        $GraphResponse = Invoke-RestMethod -Uri $GraphURI -Headers $AuthToken -Method Post -Body $Body -ContentType "application/json" -ErrorAction Stop -Verbose:$false
+
+        # Call Graph API and get JSON response
+        $GraphResponse = Invoke-RestMethod -Uri $GraphURI -Headers $AuthToken -Method Get -ErrorAction Stop -Verbose:$false
+        
+        # Handle return objects from response
+        $GraphResponse.value
+    }
+    catch [System.Exception] {
+        # Construct stream reader for reading the response body from API call
+        $ResponseBody = Get-ErrorResponseBody -Exception $_.Exception
+
+        # Handle response output and error message
+        Write-Output -InputObject "Response content:`n$ResponseBody"
+        Write-Warning -Message "Request to $($GraphURI) failed with HTTP Status $($_.Exception.Response.StatusCode) and description: $($_.Exception.Response.StatusDescription)"
+    }
 }
