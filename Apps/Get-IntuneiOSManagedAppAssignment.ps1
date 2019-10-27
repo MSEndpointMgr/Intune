@@ -22,10 +22,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-10-01
-    Updated:     2019-10-01
+    Updated:     2019-10-27
     
     Version history:
     1.0.0 - (2019-10-01) Script created
+    1.0.1 - (2019-10-27) Changed the filter for mobileApps resource to include managed apps too.
 
     Required modules:
     AzureAD (Install-Module -Name AzureAD)
@@ -181,7 +182,7 @@ Process {
         # Construct Graph variables
         $GraphVersion = "beta"
         $GraphResource = "deviceAppManagement/mobileApps"
-        $GraphURI = "https://graph.microsoft.com/$($GraphVersion)/$($GraphResource)?`$filter=(microsoft.graph.managedApp/appAvailability eq null)"
+        $GraphURI = "https://graph.microsoft.com/$($GraphVersion)/$($GraphResource)"
 
         # Invoke Graph API resource call
         $GraphResponse = Invoke-IntuneGraphRequest -URI $GraphURI
@@ -209,7 +210,7 @@ Process {
     }
 
     # Retrieve all managed apps and filter on iOS
-    $ManagedApps = Get-IntuneManagedApp | Where-Object { $_.'@odata.type' -match "iosVppApp|iosStoreApp" }
+    $ManagedApps = Get-IntuneManagedApp | Where-Object { $_.'@odata.type' -match "iosVppApp|iosStoreApp|managedIOSStoreApp" }
 
     # Process each managed app
     foreach ($ManagedApp in $ManagedApps) {
@@ -225,6 +226,7 @@ Process {
                 # Construct a custom object for final output of script 
                 $PSObject = [PSCustomObject]@{
                     AppName = $ManagedApp.displayName
+                    AppType = $ManagedApp.'@odata.type'
                     AppID = $ManagedApp.id
                     AssignmentID = $ManagedAppAssignment.id
                     UninstallOnDeviceRemoval = $ManagedAppAssignments.settings.uninstallOnDeviceRemoval
