@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.1.0
 .GUID 8d3532b3-ff9f-4031-b06f-25fcab76c626
 .AUTHOR NickolajA
 .DESCRIPTION Gather device hash from local machine and automatically upload it to Autopilot
@@ -30,26 +30,32 @@
 .PARAMETER ApplicationID
     Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration (d1ddf0e4-d672-4dae-b554-9d5bdfd93547).
 
-.PARAMETER OrderIdentifier
-    Specify the order identifier, e.g. 'Purchase<ID>'.
+.PARAMETER GroupTag
+    Specify the group tag to easier differentiate Autopilot devices, e.g. 'ABCSales'.
+
+.PARAMETER UserPrincipalName
+    Specify the primary user principal name, e.g. 'firstname.lastname@domain.com'.
 
 .EXAMPLE
-    # Gather device hash from local computer and upload to Autopilot using Intune Graph API's with a given order identifier as 'AADUserDriven':
-    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com" -OrderIdentifier "AADUserDriven"
+    # Gather device hash from local computer and upload to Autopilot using Intune Graph API's:
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com"
+
+    # Gather device hash from local computer and upload to Autopilot using Intune Graph API's with a given group tag as 'AADUserDriven':
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com" -GroupTag "AADUserDriven"
+
+    # Gather device hash from local computer and upload to Autopilot using Intune Graph API's with a given group tag as 'AADUserDriven' and 'somone@domain.com' as the assigned user:
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com" -GroupTag "AADUserDriven" -UserPrincipalName "someone@domain.com"
 
 .NOTES
     FileName:    Upload-WindowsAutopilotDeviceInfo.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-03-21
-    Updated:     2019-03-21
+    Updated:     2019-10-29
     
     Version history:
-    1.0.0 - (2019-03-21) Script created
-
-    Required modules:
-    AzureAD (Install-Module -Name AzureAD)
-    PSIntuneAuth (Install-Module -Name PSIntuneAuth)    
+    1.0.0 - (2019-03-21) Script created.
+    1.1.0 - (2019-10-29) Added support for specifying the primary user assigned to the uploaded Autopilot device as well as renaming the OrderIdentifier parameter to GroupTag. Thanks to @Stgrdk for his contributions. Switched from Get-CimSession to Get-WmiObject to get device details from WMI.
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
@@ -61,9 +67,13 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$ApplicationID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",
 
-    [parameter(Mandatory=$true, HelpMessage="Specify the order identifier, e.g. 'Purchase<ID>'.")]
+    [parameter(Mandatory=$false, HelpMessage="Specify the group tag to easier differentiate Autopilot devices, e.g. 'ABCSales'.")]
     [ValidateNotNullOrEmpty()]
-    [string]$OrderIdentifier
+    [string]$GroupTag,
+
+    [parameter(Mandatory=$false, HelpMessage="Specify the primary user principal name, e.g. 'firstname.lastname@domain.com'.")]
+    [ValidateNotNullOrEmpty()]
+    [string]$UserPrincipalName
 )
 Begin {
     # Determine if the AzureAD module needs to be installed
@@ -163,9 +173,9 @@ Process {
 
     # Gather device hash data
     Write-Verbose -Message "Gather device hash data from local machine"
-    $CimSession = New-CimSession -Verbose:$false
-    $DeviceHashData = (Get-CimInstance -CimSession $CimSession -Namespace "root/cimv2/mdm/dmmap" -Class "MDM_DevDetail_Ext01" -Filter "InstanceID='Ext' AND ParentID='./DevDetail'" -Verbose:$false).DeviceHardwareData
-    $SerialNumber = (Get-CimInstance -CimSession $CimSession -ClassName "Win32_BIOS" -Verbose:$false).SerialNumber
+    $DeviceHashData = (Get-WmiObject -Namespace "root/cimv2/mdm/dmmap" -Class "MDM_DevDetail_Ext01" -Filter "InstanceID='Ext' AND ParentID='./DevDetail'" -Verbose:$false).DeviceHardwareData
+    $SerialNumber = (Get-WmiObject -Class "Win32_BIOS" -Verbose:$false).SerialNumber
+    $ProductKey = (Get-WmiObject -Class "SoftwareLicensingService" -Verbose:$false).OA3xOriginalProductKey
 
     # Construct Graph variables
     $GraphVersion = "beta"
@@ -176,10 +186,11 @@ Process {
     Write-Verbose -Message "Constructing required JSON body based upon parameter input data for device hash upload"
     $AutopilotDeviceIdentity = [ordered]@{
         '@odata.type' = '#microsoft.graph.importedWindowsAutopilotDeviceIdentity'
-        'orderIdentifier' = "$($OrderIdentifier)"
+        'orderIdentifier' = if ($GroupTag) { "$($GroupTag)" } else { "" }
         'serialNumber' = "$($SerialNumber)"
-        'productKey' = ''
+        'productKey' = if ($ProductKey) { "$($ProductKey)" } else { "" }
         'hardwareIdentifier' = "$($DeviceHashData)"
+        'assignedUserPrincipalName' = if ($UserPrincipalName) { "$($UserPrincipalName)" } else { "" }
         'state' = @{
             '@odata.type' = 'microsoft.graph.importedWindowsAutopilotDeviceIdentityState'
             'deviceImportStatus' = 'pending'
