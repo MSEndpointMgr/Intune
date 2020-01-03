@@ -13,10 +13,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-10-29
-    Updated:     2019-10-29
+    Updated:     2020-01-03
 
     Version history:
     1.0.0 - (2019-10-29) Script created
+    1.0.1 - (2020-01-03) Added functionality to check if TPM chip is owned and take ownership if it's not
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
@@ -140,7 +141,37 @@ Process {
     else {
         try {
             # Import required module for managing BitLocker
-            Import-Module -Name BitLocker -DisableNameChecking -Verbose:$false -ErrorAction Stop
+            Import-Module -Name "BitLocker" -DisableNameChecking -Verbose:$false -ErrorAction Stop
+
+            try {
+                # Check if TPM chip is currently owned, if not take ownership
+                $TPMClass = Get-WmiObject -Namespace "root\cimv2\Security\MicrosoftTPM" -Class "Win32_TPM"
+                $IsTPMOwned = $TPMClass.IsOwned().IsOwned
+                if ($IsTPMOwned -eq $false) {
+                    Write-LogEntry -Value "TPM chip is currently not owned, value from WMI class method 'IsOwned' was: $($IsTPMOwned)" -Severity 1
+                    
+                    # Generate a random pass phrase to be used when taking ownership of TPM chip
+                    $NewPassPhrase = (New-Guid).Guid.Replace("-", "").SubString(0, 14)
+
+                    # Construct owner auth encoded string
+                    $NewOwnerAuth = $TPMClass.ConvertToOwnerAuth($NewPassPhrase).OwnerAuth
+
+                    # Attempt to take ownership of TPM chip
+                    $Invocation = $TPMClass.TakeOwnership($NewOwnerAuth)
+                    if ($Invocation.ReturnValue -eq 0) {
+                        Write-LogEntry -Value "TPM chip ownership was successfully taken" -Severity 1
+                    }
+                    else {
+                        Write-LogEntry -Value "Failed to take ownership of TPM chip, return value from invocation: $($Invocation.ReturnValue)" -Severity 3
+                    }
+                }
+                else {
+                    Write-LogEntry -Value "TPM chip is currently owned, will not attempt to take ownership" -Severity 1
+                }
+            }
+            catch [System.Exception] {
+                Write-LogEntry -Value "An error occurred while taking ownership of TPM chip. Error message: $($_.Exception.Message)" -Severity 3
+            }
 
             try {
                 # Retrieve the current encryption status of the operating system drive
