@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-    Monitor all Apple Connectors like Push Notification Certificate, VPP and DEP tokens. 
-    This script is written to be used in an Azure Automation runbook to monitor your Intune deployment connectors. 
+    Monitor all Apple Connectors like Push Notification Certificate, VPP and DEP tokens.
+    This script is written to be used in an Azure Automation runbook to monitor your Intune deployment connectors.
 .DESCRIPTION
-    Monitor all Apple Connectors like Push Notification Certificate, VPP and DEP tokens. 
+    Monitor all Apple Connectors like Push Notification Certificate, VPP and DEP tokens.
 
 .VARIABLES
-All variables must be defines in Azure Automation 
-    TenantName 
-        Specify the *.onmicrosoft.com name for your tenant. 
+All variables must be defines in Azure Automation
+    TenantName
+        Specify the *.onmicrosoft.com name for your tenant.
     AppID
         Specify the ClientID of the Azure AD App used for unattended authentication to MS Graph API
     AppSecret (encrypted)
@@ -16,10 +16,10 @@ All variables must be defines in Azure Automation
     ApplicationID
         Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration.
     Uri
-        The Uri for the webhook for the Microsoft Teams channel we are sending the alerts too. 
+        The Uri for the webhook for the Microsoft Teams channel we are sending the alerts too.
 
 .EXAMPLE
-    # Script runs unnatended from Azure Automation - all parameters should be defined in Automation account 
+    # Script runs unnatended from Azure Automation - all parameters should be defined in Automation account
     Monitor-IntuneAppleConnectors.ps1
 
 .NOTES
@@ -31,6 +31,7 @@ All variables must be defines in Azure Automation
 
     Version history:
     1.0.0 - (2020-01-04) First release
+    1.0.1 - (2020-01-07) Updated to include link to Portal (@onpremcloudguy)
 
     Required modules:
     "Microsoft.graph.intune"
@@ -40,12 +41,12 @@ $AppleMDMPushCertNotificationRange = '30'
 $AppleVPPTokenNotificationRange = '30'
 $AppleDEPTokenNotificationRange = '30'
 
-# Grab variables frrom automation account - this must match your variable names in Azure Automation Account 
-# Example $Uri = Get-AutomationVariable -Name "TeamsChannelUri" means the VariableTeamsChannelUri must exist in Azure Automation with the correct variable. 
+# Grab variables frrom automation account - this must match your variable names in Azure Automation Account
+# Example $Uri = Get-AutomationVariable -Name "TeamsChannelUri" means the VariableTeamsChannelUri must exist in Azure Automation with the correct variable.
 $TenantName = Get-AutomationVariable -Name 'TenantName'
-$AppID = Get-AutomationVariable -Name "msgraph-clientcred-appid"
-$AppSecret = Get-AutomationVariable -Name "msgraph-clientcred-appsecret"
-$Uri = Get-AutomationVariable -Name "TeamsChannelUri"
+$AppID = Get-AutomationVariable -Name "IntuneMonitorClientID"
+$AppSecret = Get-AutomationVariable -Name "IntuneMonitorClientSecret"
+$Uri = Get-AutomationVariable -Name "IntuneMonitorTeamsUri"
 $Now = Get-Date
 Function Send-TeamsAlerts {
     [cmdletbinding()]
@@ -54,9 +55,19 @@ Function Send-TeamsAlerts {
         [string]$ConnectorName,
         [string]$ExpirationStatus,
         [string]$AppleId,
-        [string]$ExpDateStr
+        [string]$ExpDateStr,
+        [string]$tenant,
+        [string]$objID
         )
-#Format Message Body for Message Card in Microsoft Teams 
+        $url = ""
+        switch ($ConnectorName) {
+            "Apple Push Notification Certificate" { $url = "#blade/Microsoft_Intune_Enrollment/EnrollmentMenu/appleEnrollment" }
+            "VPP Token" { $url = "#blade/Microsoft_Intune_Apps/MainMenu/7/selectedMenuItem/Overview" }
+            "DEP Token" { $url = "#blade/Microsoft_Intune_Enrollment/DepTokenMenuBlade/overview/tokenId/$objid" }
+            Default {}
+        }
+
+#Format Message Body for Message Card in Microsoft Teams
 $body = @"
 {
     "@type": "MessageCard",
@@ -87,6 +98,21 @@ $body = @"
                     "value": "$ExpDateStr"
                 }
             ],
+            "potentialAction": [
+                {
+                    "@type": "ActionCard",
+                    "name": "Change status",
+                    "actions": [
+                        {
+                            "@type": "OpenUri",
+                            "name": "Check in Portal",
+                            "targets": [
+                                { "os": "default", "uri": "https://portal.azure.com/$tenant/$url" }
+                            ]
+                        }
+                    ]
+                }
+            ],
             "text": "Must be renewed by IT Admin before the expiry date."
         }
     ]
@@ -99,35 +125,35 @@ Write-Output $ExpirationStatus
 #Import Modules
 import-module "Microsoft.graph.intune"
 
-# Connect to Intune MSGraph with Client Secret quietly by updating Graph Environment to use our own Azure AD APP and connecting with a ClientSecret 
+# Connect to Intune MSGraph with Client Secret quietly by updating Graph Environment to use our own Azure AD APP and connecting with a ClientSecret
 Update-MSGraphEnvironment -SchemaVersion "beta" -AppId $AppId -AuthUrl "https://login.microsoftonline.com/$TenantName" -Quiet
 Connect-MSGraph -ClientSecret $AppSecret -Quiet
 
-# Checking Apple Push Notification Cert 
+# Checking Apple Push Notification Cert
 $ApplePushCert = Get-IntuneApplePushNotificationCertificate
 $ApplePushCertExpDate = $ApplePushCert.expirationDateTime
 $ApplePushIdentifier = $ApplePushCert.appleIdentifier
 $APNExpDate = $ApplePushCertExpDate.ToShortDateString()
-    
+
 if ($ApplePushCertExpDate -lt (Get-Date)) {
     $APNExpirationStatus = "MS Intune: Apple MDM Push certificate has already expired"
-    Send-TeamsAlerts -uri $uri -ConnectorName "Apple Push Notification Certificate" -ExpirationStatus $APNExpirationStatus -AppleId $ApplePushIdentifier -ExpDateStr $APNExpDate 
+    Send-TeamsAlerts -uri $uri -ConnectorName "Apple Push Notification Certificate" -ExpirationStatus $APNExpirationStatus -AppleId $ApplePushIdentifier -ExpDateStr $APNExpDate -tenant $TenantName -objID $ApplePushCert.id
 }
 else {
     $AppleMDMPushCertDaysLeft = ($ApplePushCertExpDate - (Get-Date))
     if ($AppleMDMPushCertDaysLeft.Days -le $AppleMDMPushCertNotificationRange) {
     $APNExpirationStatus = "MSIntune: Apple MDM Push certificate expires in $($AppleMDMPushCertDaysLeft.Days) days"
-    Send-TeamsAlerts -uri $uri -ConnectorName "Apple Push Notification Certificate" -ExpirationStatus $APNExpirationStatus -AppleId $ApplePushIdentifier -ExpDateStr $APNExpDate 
+    Send-TeamsAlerts -uri $uri -ConnectorName "Apple Push Notification Certificate" -ExpirationStatus $APNExpirationStatus -AppleId $ApplePushIdentifier -ExpDateStr $APNExpDate -tenant $TenantName -objID $ApplePushCert.id
     }
     else {
     $APNExpirationStatus = "MSIntune: NOALERT"
     Write-Output "APN Certificate OK"
     }
 }
-    
-# Checking Apple Volume Purchase Program tokens 
+
+# Checking Apple Volume Purchase Program tokens
 $AppleVPPToken = Get-DeviceAppManagement_VppTokens
-    
+
 if($AppleVPPToken.Count -ne '0'){
     foreach ($token in $AppleVPPToken){
         $AppleVPPExpDate = $token.expirationDateTime
@@ -136,12 +162,12 @@ if($AppleVPPToken.Count -ne '0'){
         $VPPExpDateStr = $AppleVPPExpDate.ToShortDateString()
         if ($AppleVPPState -ne 'valid') {
             $VPPExpirationStatus = "MSIntune: Apple VPP Token is not valid, new token required"
-            Send-TeamsAlerts -uri $uri -ConnectorName "VPP Token" -ExpirationStatus $VPPExpirationStatus -AppleId $AppleVPPIdentifier -ExpDateStr $VPPExpDateStr
+            Send-TeamsAlerts -uri $uri -ConnectorName "VPP Token" -ExpirationStatus $VPPExpirationStatus -AppleId $AppleVPPIdentifier -ExpDateStr $VPPExpDateStr -tenant $TenantName -objID $token.id
         }
         else {
         $AppleVPPTokenDaysLeft = ($AppleVPPExpDate - (Get-Date))
             if ($AppleVPPTokenDaysLeft.Days -le $AppleVPPTokenNotificationRange) {$VPPExpirationStatus = "MSIntune: Apple VPP Token expires in $($AppleVPPTokenDaysLeft.Days) days"
-            Send-TeamsAlerts -uri $uri -ConnectorName "VPP Token" -ExpirationStatus $VPPExpirationStatus -AppleId $AppleVPPIdentifier -ExpDateStr $VPPExpDateStr
+            Send-TeamsAlerts -uri $uri -ConnectorName "VPP Token" -ExpirationStatus $VPPExpirationStatus -AppleId $AppleVPPIdentifier -ExpDateStr $VPPExpDateStr -tenant $TenantName -objID $token.id
             }
             else {$VPPExpirationStatus = "MSIntune: NOALERT"
             Write-Output "Apple VPP Token OK"
@@ -152,7 +178,7 @@ if($AppleVPPToken.Count -ne '0'){
 
 # Checking DEP Token
 $AppleDEPToken = (Invoke-MSGraphRequest -Url 'https://graph.microsoft.com/beta/deviceManagement/depOnboardingSettings' -HttpMethod GET).value
-if ($AppleDeptoken.Count -ne '0'){ 
+if ($AppleDeptoken.Count -ne '0'){
     foreach ($token in $AppleDEPToken){
         $AppleDEPExpDate = $token.tokenExpirationDateTime
         $AppleDepID = $token.appleIdentifier
@@ -160,11 +186,11 @@ if ($AppleDeptoken.Count -ne '0'){
         $DEPExpDateStr = $AppleDEPExpDate.ToShortDateString()
         if ($AppleDEPTokenDaysLeft.Days -le $AppleDEPTokenNotificationRange) {
             $AppleDEPExpirationStatus = "MSIntune: Apple DEP Token expires in $($AppleDEPTokenDaysLeft.Days) days"
-            Send-TeamsAlerts -uri $uri -ConnectorName "DEP Token" -ExpirationStatus $AppleDEPExpirationStatus -AppleId $AppleDEPId -ExpDateStr $DEPExpDateStr
+            Send-TeamsAlerts -uri $uri -ConnectorName "DEP Token" -ExpirationStatus $AppleDEPExpirationStatus -AppleId $AppleDEPId -ExpDateStr $DEPExpDateStr -tenant $TenantName -objID $Token.ID
         }
         else {
             $AppleDEPExpirationStatus = "MSIntune: NOALERT"
-            Write-Output "Apple DEP Token OK" 
+            Write-Output "Apple DEP Token OK"
             }
     }
 }
