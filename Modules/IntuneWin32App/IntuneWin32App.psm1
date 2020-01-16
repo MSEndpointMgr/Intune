@@ -1342,12 +1342,10 @@ function Invoke-AzureStorageBlobUploadFinalize {
 	$XML += '</BlockList>'
 
 	try {
-		Invoke-RestMethod -Uri $Uri -Method "Put" -Body $XML
+		Invoke-RestMethod -Uri $Uri -Method "Put" -Body $XML -ErrorAction Stop
 	}
 	catch {
-		Write-Host -ForegroundColor Red $Request;
-		Write-Host -ForegroundColor Red $_.Exception.Message;
-		throw;
+		Write-Warning -Message "Failed to finalize Azure Storage blob upload. Error message: $($_.Exception.Message)"
 	}
 }
 
