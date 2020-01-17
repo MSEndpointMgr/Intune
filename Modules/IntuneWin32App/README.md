@@ -40,17 +40,17 @@ The functions that have these parameters, an authorization token is acquired. Th
 Use the New-IntuneWin32AppPackage function in the module to create a content package for a Win32 app. MSI, EXE and script-based applications are supported by this function. In the sample below, application source files for 7-Zip including the setup file are specified and being packaged into an .intunewin encrypted file. Package will be exported to the output folder.
 ```PowerShell
 # Package MSI as .intunewin file
-$SourceFolder = "C:\Temp\IntuneWinAppUtil\Source\7-Zip"
+$SourceFolder = "C:\IntuneWinAppUtil\Source\7-Zip"
 $SetupFile = "7z1900-x64.msi"
-$OutputFolder = "C:\Temp\IntuneWinAppUtil\Output"
+$OutputFolder = "C:\IntuneWinAppUtil\Output"
 New-IntuneWin32AppPackage -SourceFolder $SourceFolder -SetupFile $SetupFile -OutputFolder $OutputFolder -Verbose
 ```
 
 ## Create a new MSI based installation as a Win32 app
-Use the Add-IntuneWin32App function to create a new Win32 app in Microsoft Intune. This function has dependencies for other functions in the module. For instance when passing the detection rule for the Win32 app, you need to use the New-IntuneWin32AppDetectionRule function to create the required input object. Below is an example how the dependent functions in this module can be used together with the Add-IntuneWin32App function to successfully upload a packaged Win32 app content file to Microsoft Intune.
+Use the New-IntuneWin32AppPackage function to first create the packaged Win32 app content file (.intunewin). Then call the Add-IntuneWin32App function to create a new Win32 app in Microsoft Intune. This function has dependencies for other functions in the module. For instance when passing the detection rule for the Win32 app, you need to use the New-IntuneWin32AppDetectionRule function to create the required input object. Below is an example how the dependent functions in this module can be used together with the Add-IntuneWin32App function to successfully upload a packaged Win32 app content file to Microsoft Intune.
 ```PowerShell
 # Get MSI meta data from .intunewin file
-$IntuneWinFile = "C:\Temp\IntuneWinAppUtil\Output\7z1900-x64.intunewin"
+$IntuneWinFile = "C:\IntuneWinAppUtil\Output\7z1900-x64.intunewin"
 $IntuneWinMetaData = Get-IntuneWin32AppMetaData -FilePath $IntuneWinFile
 $IntuneWinMetaData.ApplicationInfo.EncryptionInfo
 
@@ -63,3 +63,29 @@ $DetectionRule = New-IntuneWin32AppDetectionRule -MSI -MSIProductCode $IntuneWin
 # Add new MSI Win32 app
 Add-IntuneWin32App -TenantName "name.onmicrosoft.com" -FilePath $IntuneWinFile -DisplayName $DisplayName -InstallExperience "system" -RestartBehavior "suppress" -DetectionRule $DetectionRule -Verbose
 ```
+
+## Create a new EXE/script based installation as a Win32 app
+Use the New-IntuneWin32AppPackage function to first create the packaged Win32 app content file (.intunewin). Then call the Add-IntuneWin32App much like the example above illustrates for a MSI installation based Win32 app. Apart from the above example, for an EXE/script based Win32 app, a few other parameters are required:
+- InstallCommandLine
+- UninstallCommandLine
+The detection rule is also constructed differently, for example in the below script it's using a PowerShell script as the detection logic. In the example below a Win32 app is created that's essentially a PowerShell script that executes and another PowerShell script used for detection.
+```PowerShell
+# Get MSI meta data from .intunewin file
+$IntuneWinFile = "C:\IntuneWinAppUtil\Output\Enable-BitLockerEncryption.intunewin"
+$IntuneWinMetaData = Get-IntuneWin32AppMetaData -FilePath $IntuneWinFile
+
+# Create custom display name like 'Name' and 'Version'
+$DisplayName = "Enable BitLocker Encryption 1.0"
+
+# Create PowerShell script detection rule
+$DetectionScriptFile = "C:\IntuneWinAppUtil\Output\Get-BitLockerEncryptionDetection.ps1"
+$DetectionRule = New-IntuneWin32AppDetectionRule -PowerShellScript -ScriptFile $DetectionScriptFile -EnforceSignatureCheck $false -RunAs32Bit $false
+
+# Add new EXE Win32 app
+$InstallCommandLine = "powershell.exe -ExecutionPolicy Bypass -File .\Enable-BitLockerEncryption.ps1"
+$UninstallCommandLine = "cmd.exe /c"
+Add-IntuneWin32App -TenantName "name.onmicrosoft.com" -FilePath $IntuneWinFile -DisplayName $DisplayName -Description "Start BitLocker silent encryption" -Publisher "SCConfigMgr" -InstallExperience "system" -RestartBehavior "suppress" -DetectionRule $DetectionRule -ReturnCode $ReturnCode -InstallCommandLine $InstallCommandLine -UninstallCommandLine $UninstallCommandLine -Verbose
+```
+
+## Additional parameters for Add-IntuneWin32App function
+Icon, return code
