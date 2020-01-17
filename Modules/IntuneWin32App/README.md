@@ -37,7 +37,17 @@ A set of functions in this module, those that interact with Microsoft Intune (es
 The functions that have these parameters, an authorization token is acquired. This will by default happen for the sign-in user, if possible. For scenarios when another credential is required to acquire the authorization token, specify Always as the value for PromptBehavior.
 
 ## Get existing Win32 apps
+Get-IntuneWin32App function can be used to retrieve existing Win32 apps in Microsoft Intune. Retrieving an existing Win32 app could either be done passing the display name of the app, which performs a wildcard search meaning it's not required to specify the full name of the Win32 app. The ID if a specific Win32 app could also be used for this function. Additionally, by not specifying either a display name or an ID, all Win32 apps available will be retrieved. Below are a few examples of how this function could be used:
+```PowerShell
+# Get all Win32 apps
+Get-IntuneWin32App -TenantName "name.onmicrosoft.com" -Verbose
 
+# Get a specific Win32 app by it's display name
+Get-IntuneWin32App -TenantName "name.onmicrosoft.com" -DisplayName "7-zip" -Verbose
+
+# Get a specific Win32 app by it's id
+Get-IntuneWin32App -TenantName "name.onmicrosoft.com" -ID "<Win32 app ID>" -Verbose
+```
 
 ## Package application source files into Win32 app package (.intunewin)
 Use the New-IntuneWin32AppPackage function in the module to create a content package for a Win32 app. MSI, EXE and script-based applications are supported by this function. This function automatically downloads the IntuneWinAppUtil.exe application that's essentially the engine behind the packaging and encryption process. The utility will be downloaded to the temporary directory of the user running the function, more specifically the location of the environment variable %TEMP%. If required, a custom path to where IntuneWinAppUtil.exe already exists is possible to pass to the function using the IntuneWinAppUtilPath parameter. In the sample below, application source files for 7-Zip including the setup file are specified and being packaged into an .intunewin encrypted file. Package will be exported to the output folder.
@@ -90,12 +100,6 @@ $UninstallCommandLine = "cmd.exe /c"
 Add-IntuneWin32App -TenantName "name.onmicrosoft.com" -FilePath $IntuneWinFile -DisplayName $DisplayName -Description "Start BitLocker silent encryption" -Publisher "SCConfigMgr" -InstallExperience "system" -RestartBehavior "suppress" -DetectionRule $DetectionRule -ReturnCode $ReturnCode -InstallCommandLine $InstallCommandLine -UninstallCommandLine $UninstallCommandLine -Verbose
 ```
 
-## Create a Win32 app assignment to a group
-
-```PowerShell
-
-```
-
 ## Additional parameters for Add-IntuneWin32App function
 When creating a Win32 app, additional configuration is possible when using the Add-IntuneWin32App function. It's possible to set the icon for the Win32 app using the Icon parameter. If desired, it's also possible to add custom, in addition to the default, return codes by adding the ReturnCode parameter. Below is an example of how the Add-IntuneWin32App function could be extended with those parameters by using the New-IntuneWin32AppIcon and New-IntuneWin32AppReturnCode functions:
 
@@ -106,6 +110,30 @@ $ReturnCode = New-IntuneWin32AppReturnCode -ReturnCode 1337 -Type retry
 # Convert image file to icon
 $ImageFile = "C:\IntuneWinAppUtil\Logos\Image.png"
 $Icon = New-IntuneWin32AppIcon -FilePath $ImageFile
+```
+
+## Create a Win32 app assignment
+IntuneWin32App module also supports adding assignments. In version 1.0.0, functionality for creating an assignment for an existing Win32 app in Microsoft Intune (or one created with the Add-IntuneWin32App function), consists of targeting for:
+- All Users
+- Specified group
+
+Assignments created with this module doesn't currently support specifying an installation deadline or available time. The assignment will by default be created with the settings for installation deadline and availability configured as 'As soon as possible'. Below is an example of how to add assignments using the module:
+### Adding for a group
+```PowerShell
+# Get a specific Win32 app by it's display name
+$Win32App = Get-IntuneWin32App -TenantName "name.onmicrosoft.com" -DisplayName "7-zip" -Verbose
+
+# Add assignment for a specific Azure AD group
+$GroupID = "<Azure AD group ID>"
+Add-IntuneWin32AppAssignment -TenantName "name.onmicrosoft.com" -DisplayName $Win32App.displayName -Target "Group" -GroupID $GroupID -Intent "available" -Notification "showAll" -Verbose
+```
+### Adding for all users
+```PowerShell
+# Get a specific Win32 app by it's display name
+$Win32App = Get-IntuneWin32App -TenantName "name.onmicrosoft.com" -DisplayName "7-zip" -Verbose
+
+# Add assignment for all users
+Add-IntuneWin32AppAssignment -TenantName "name.onmicrosoft.com" -DisplayName $Win32App.displayName -Target "AllUsers" -Intent "available" -Notification "showAll" -Verbose
 ```
 
 ## Expand
