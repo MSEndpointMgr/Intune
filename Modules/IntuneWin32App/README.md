@@ -36,8 +36,11 @@ A set of functions in this module, those that interact with Microsoft Intune (es
 
 The functions that have these parameters, an authorization token is acquired. This will by default happen for the sign-in user, if possible. For scenarios when another credential is required to acquire the authorization token, specify Always as the value for PromptBehavior.
 
+## Get existing Win32 apps
+
+
 ## Package application source files into Win32 app package (.intunewin)
-Use the New-IntuneWin32AppPackage function in the module to create a content package for a Win32 app. MSI, EXE and script-based applications are supported by this function. In the sample below, application source files for 7-Zip including the setup file are specified and being packaged into an .intunewin encrypted file. Package will be exported to the output folder.
+Use the New-IntuneWin32AppPackage function in the module to create a content package for a Win32 app. MSI, EXE and script-based applications are supported by this function. This function automatically downloads the IntuneWinAppUtil.exe application that's essentially the engine behind the packaging and encryption process. The utility will be downloaded to the temporary directory of the user running the function, more specifically the location of the environment variable %TEMP%. If required, a custom path to where IntuneWinAppUtil.exe already exists is possible to pass to the function using the IntuneWinAppUtilPath parameter. In the sample below, application source files for 7-Zip including the setup file are specified and being packaged into an .intunewin encrypted file. Package will be exported to the output folder.
 ```PowerShell
 # Package MSI as .intunewin file
 $SourceFolder = "C:\IntuneWinAppUtil\Source\7-Zip"
@@ -47,12 +50,11 @@ New-IntuneWin32AppPackage -SourceFolder $SourceFolder -SetupFile $SetupFile -Out
 ```
 
 ## Create a new MSI based installation as a Win32 app
-Use the New-IntuneWin32AppPackage function to first create the packaged Win32 app content file (.intunewin). Then call the Add-IntuneWin32App function to create a new Win32 app in Microsoft Intune. This function has dependencies for other functions in the module. For instance when passing the detection rule for the Win32 app, you need to use the New-IntuneWin32AppDetectionRule function to create the required input object. Below is an example how the dependent functions in this module can be used together with the Add-IntuneWin32App function to successfully upload a packaged Win32 app content file to Microsoft Intune.
+Use the New-IntuneWin32AppPackage function to first create the packaged Win32 app content file (.intunewin). Then call the Add-IntuneWin32App function to create a new Win32 app in Microsoft Intune. This function has dependencies for other functions in the module. For instance when passing the detection rule for the Win32 app, you need to use the New-IntuneWin32AppDetectionRule function to create the required input object. Below is an example how the dependent functions in this module can be used together with the Add-IntuneWin32App function to successfully upload a packaged Win32 app content file to Microsoft Intune:
 ```PowerShell
 # Get MSI meta data from .intunewin file
 $IntuneWinFile = "C:\IntuneWinAppUtil\Output\7z1900-x64.intunewin"
 $IntuneWinMetaData = Get-IntuneWin32AppMetaData -FilePath $IntuneWinFile
-$IntuneWinMetaData.ApplicationInfo.EncryptionInfo
 
 # Create custom display name like 'Name' and 'Version'
 $DisplayName = $IntuneWinMetaData.ApplicationInfo.Name + " " + $IntuneWinMetaData.ApplicationInfo.MsiInfo.MsiProductVersion
@@ -68,7 +70,8 @@ Add-IntuneWin32App -TenantName "name.onmicrosoft.com" -FilePath $IntuneWinFile -
 Use the New-IntuneWin32AppPackage function to first create the packaged Win32 app content file (.intunewin). Then call the Add-IntuneWin32App much like the example above illustrates for a MSI installation based Win32 app. Apart from the above example, for an EXE/script based Win32 app, a few other parameters are required:
 - InstallCommandLine
 - UninstallCommandLine
-The detection rule is also constructed differently, for example in the below script it's using a PowerShell script as the detection logic. In the example below a Win32 app is created that's essentially a PowerShell script that executes and another PowerShell script used for detection.
+
+The detection rule is also constructed differently, for example in the below script it's using a PowerShell script as the detection logic. In the example below a Win32 app is created that's essentially a PowerShell script that executes and another PowerShell script used for detection:
 ```PowerShell
 # Get MSI meta data from .intunewin file
 $IntuneWinFile = "C:\IntuneWinAppUtil\Output\Enable-BitLockerEncryption.intunewin"
@@ -87,5 +90,32 @@ $UninstallCommandLine = "cmd.exe /c"
 Add-IntuneWin32App -TenantName "name.onmicrosoft.com" -FilePath $IntuneWinFile -DisplayName $DisplayName -Description "Start BitLocker silent encryption" -Publisher "SCConfigMgr" -InstallExperience "system" -RestartBehavior "suppress" -DetectionRule $DetectionRule -ReturnCode $ReturnCode -InstallCommandLine $InstallCommandLine -UninstallCommandLine $UninstallCommandLine -Verbose
 ```
 
+## Create a Win32 app assignment to a group
+
+```PowerShell
+
+```
+
 ## Additional parameters for Add-IntuneWin32App function
-Icon, return code
+When creating a Win32 app, additional configuration is possible when using the Add-IntuneWin32App function. It's possible to set the icon for the Win32 app using the Icon parameter. If desired, it's also possible to add custom, in addition to the default, return codes by adding the ReturnCode parameter. Below is an example of how the Add-IntuneWin32App function could be extended with those parameters by using the New-IntuneWin32AppIcon and New-IntuneWin32AppReturnCode functions:
+
+```PowerShell
+# Create custom return code
+$ReturnCode = New-IntuneWin32AppReturnCode -ReturnCode 1337 -Type retry
+
+# Convert image file to icon
+$ImageFile = "C:\IntuneWinAppUtil\Logos\Image.png"
+$Icon = New-IntuneWin32AppIcon -FilePath $ImageFile
+```
+
+## Expand
+The New-IntuneWin32AppPackage function packages and encrypts a Win32 app content file (.intunewin file). This file can be uncompressed using any decompression tool, e.g. 7-Zip. Inside the file resides a folder structure resides essentially two important files for that's required for the Expand-IntuneWin32AppPackage function. These two files, detection.xml <PackageName>.intunewin, was generated when IntuneWinAppUtil.exe executed. Detection.xml contains the encryption info, more specifically the encryptionKey and initializationVector details. <PackageName>.intunewin is the actual encrypted file, that with the encryptionKey and initializationVector info, can be decrypted. This function can 'expand', meaning to uncompress and decrypt the original Win32 app content file containing the two files already mentioned, but does not support decryption only of the <PackageName>.intunewin file that was already uploaded to Microsoft Intune for a given Win32 app and then later downloaded from the Azure Storage blob associated with that app. This is because Graph API does not expose the encryptionKey and initializationVector data once a Win32 app content file has been uploaded to Microsoft Intune. A request to expose this data in Graph API has been sent to Microsoft, but the future will tell if they decide to fullfil that request. Below is an example of how to use the Expand-IntuneWin32AppPackage function using the full Win32 app content file created either manually with IntuneWinAppUtil.exe or with the New-IntuneWin32AppPackage function:
+
+```PowerShell
+# Decode an existing Win32 app content file
+$IntuneWinFile = "C:\IntuneWinAppUtil\Output\7z1900-x64.intunewin"
+Expand-IntuneWin32AppPackage -FilePath $IntuneWinFile -Force -Verbose
+```
+
+## Full example of packaging and creating a Win32 app
+Package, create, return codes, Icon
