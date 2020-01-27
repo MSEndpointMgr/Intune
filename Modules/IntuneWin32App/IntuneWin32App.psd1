@@ -11,7 +11,7 @@
 RootModule = 'IntuneWin32App.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.1'
+ModuleVersion = '1.1.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -68,7 +68,18 @@ RequiredModules = @("AzureAD", "PSIntuneAuth")
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Get-IntuneWin32App', 'New-IntuneWin32AppPackage', 'Add-IntuneWin32App', 'Add-IntuneWin32AppAssignment', 'New-IntuneWin32AppDetectionRule', 'Get-IntuneWin32AppMetaData', 'New-IntuneWin32AppReturnCode', 'New-IntuneWin32AppIcon', 'Expand-IntuneWin32AppPackage'
+FunctionsToExport = @('Get-IntuneWin32App',`
+                      'New-IntuneWin32AppPackage',`
+                      'Add-IntuneWin32App',`
+                      'Add-IntuneWin32AppAssignment',`
+                      'New-IntuneWin32AppDetectionRule',`
+                      'Get-IntuneWin32AppMetaData',`
+                      'New-IntuneWin32AppReturnCode',`
+                      'New-IntuneWin32AppIcon',`
+                      'Expand-IntuneWin32AppPackage',`
+                      'Get-MSIMetaData',`
+                      "New-IntuneWin32AppRequirementRule"
+)
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()

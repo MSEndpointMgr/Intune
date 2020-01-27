@@ -24,7 +24,7 @@ function Get-AuthToken {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>    
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify the tenant name, e.g. domain.onmicrosoft.com.")]
         [ValidateNotNullOrEmpty()]
@@ -126,6 +126,71 @@ function Get-ErrorResponseBody {
     return $ResponseBody
 }
 
+function Get-MSIMetaData {
+    <#
+    .SYNOPSIS
+        Retrieve a specific MSI property value from MSI based installation file.
+
+    .DESCRIPTION
+        Retrieve a specific MSI property value from MSI based installation file.
+
+    .PARAMETER Path
+        Specify the full path to a MSI based installation file.
+
+    .PARAMETER Property
+        Specify the MSI database property to retrieve it's value.
+
+    .NOTES
+        Author:      Nickolaj Andersen
+        Contact:     @NickolajA
+        Created:     2020-01-04
+        Updated:     2020-01-04
+
+        Version history:
+        1.0.0 - (2020-01-27) Function created
+    #>    
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [parameter(Mandatory = $true, HelpMessage = "Specify the full path to a MSI based installation file.")]
+        [ValidateNotNullOrEmpty()]
+        [System.IO.FileInfo]$Path,
+
+        [parameter(Mandatory = $true, HelpMessage = "Specify the MSI database property to retrieve it's value.")]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet("ProductCode", "ProductVersion", "ProductName", "Manufacturer", "ProductLanguage", "FullVersion")]
+        [string]$Property
+    )
+    Process {
+        try {
+            # Read property from MSI database
+            $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+            $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
+            $Query = "SELECT Value FROM Property WHERE Property = '$($Property)'"
+            $View = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, ($Query))
+            $View.GetType().InvokeMember("Execute", "InvokeMethod", $null, $View, $null)
+            $Record = $View.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $View, $null)
+            $Value = $Record.GetType().InvokeMember("StringData", "GetProperty", $null, $Record, 1)
+
+            # Commit database and close view
+            $MSIDatabase.GetType().InvokeMember("Commit", "InvokeMethod", $null, $MSIDatabase, $null)
+            $View.GetType().InvokeMember("Close", "InvokeMethod", $null, $View, $null)           
+            $MSIDatabase = $null
+            $View = $null
+
+            # Return the value
+            return $Value
+        } 
+        catch {
+            Write-Warning -Message $_.Exception.Message; break
+        }
+    }
+    End {
+        # Run garbage collection and release ComObject
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WindowsInstaller) | Out-Null
+        [System.GC]::Collect()
+    }
+}
+
 function New-IntuneWin32AppPackage {
     <#
     .SYNOPSIS
@@ -155,7 +220,7 @@ function New-IntuneWin32AppPackage {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>    
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify the full path of the source folder where the setup file and all of it's potential dependency files reside.")]
         [ValidateNotNullOrEmpty()]
@@ -573,7 +638,7 @@ function Expand-IntuneWin32AppPackage {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify the full path of the locally available packaged Win32 application, e.g. 'C:\Temp\AppName.intunewin'.")]
         [ValidateNotNullOrEmpty()]
@@ -792,6 +857,9 @@ function Add-IntuneWin32App {
     .PARAMETER DetectionRule
         Provide an array of a single or multiple OrderedDictionary objects as detection rules that will be used for the Win32 application.
 
+    .PARAMETER RequirementRule
+        Provide an OrderedDictionary object as requirement rule that will be used for the Win32 application.
+
     .PARAMETER ReturnCode
         Provide an array of a single or multiple hash-tables for the Win32 application with return code information.
 
@@ -812,6 +880,7 @@ function Add-IntuneWin32App {
 
         Version history:
         1.0.0 - (2020-01-04) Function created
+        1.0.1 - (2020-01-27) Added support for RequirementRule parameter input
 
         Required modules:
         AzureAD (Install-Module -Name AzureAD)
@@ -889,6 +958,11 @@ function Add-IntuneWin32App {
         [ValidateNotNullOrEmpty()]
         [System.Collections.Specialized.OrderedDictionary[]]$DetectionRule,
 
+        [parameter(Mandatory = $false, ParameterSetName = "MSI", HelpMessage = "Provide an OrderedDictionary object as requirement rule that will be used for the Win32 application.")]
+        [parameter(Mandatory = $false, ParameterSetName = "EXE")]
+        [ValidateNotNullOrEmpty()]
+        [System.Collections.Specialized.OrderedDictionary]$RequirementRule,
+
         [parameter(Mandatory = $false, ParameterSetName = "MSI", HelpMessage = "Provide an array of a single or multiple hash-tables for the Win32 application with return code information.")]
         [parameter(Mandatory = $false, ParameterSetName = "EXE")]
         [ValidateNotNullOrEmpty()]
@@ -898,10 +972,6 @@ function Add-IntuneWin32App {
         [parameter(Mandatory = $false, ParameterSetName = "EXE")]
         [ValidateNotNullOrEmpty()]
         [string]$Icon,
-
-        ###
-        ### Requirement Rule param here
-        ###
 
         [parameter(Mandatory = $false, ParameterSetName = "MSI", HelpMessage = "Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration.")]
         [parameter(Mandatory = $false, ParameterSetName = "EXE")]
@@ -992,6 +1062,9 @@ function Add-IntuneWin32App {
                         if ($PSBoundParameters["Icon"]) {
                             $AppBodySplat.Add("Icon", $Icon)
                         }
+                        if ($PSBoundParameters["RequirementRule"]) {
+                            $AppBodySplat.Add("RequirementRule", $RequirementRule)
+                        }
 
                         $Win32AppBody = New-IntuneWin32AppBody @AppBodySplat
                         Write-Verbose -Message "Constructed the basic layout for 'MSI' Win32 app body type"
@@ -1013,6 +1086,9 @@ function Add-IntuneWin32App {
                         }
                         if ($PSBoundParameters["Icon"]) {
                             $AppBodySplat.Add("Icon", $Icon)
+                        }
+                        if ($PSBoundParameters["RequirementRule"]) {
+                            $AppBodySplat.Add("RequirementRule", $RequirementRule)
                         }
 
                         $Win32AppBody = New-IntuneWin32AppBody @AppBodySplat
@@ -1633,7 +1709,7 @@ function New-IntuneWin32AppReturnCode {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify the return code value for the Win32 application body.")]
         [ValidateNotNullOrEmpty()]
@@ -1698,8 +1774,9 @@ function New-IntuneWin32AppBody {
 
         Version history:
         1.0.0 - (2020-01-04) Function created
+        1.0.1 - (2020-01-27) Added support for RequirementRule parameter input
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, ParameterSetName = "MSI", HelpMessage = "Define that the Win32 application body will be MSI based.")]
         [switch]$MSI,
@@ -1748,6 +1825,11 @@ function New-IntuneWin32AppBody {
         [ValidateSet("allow", "basedOnReturnCode", "suppress", "force")]
         [string]$RestartBehavior,
 
+        [parameter(Mandatory = $false, ParameterSetName = "MSI", HelpMessage = "Specify the requirement rules for the Win32 application body.")]
+        [parameter(Mandatory = $false, ParameterSetName = "EXE")]
+        [ValidateNotNullOrEmpty()]
+        [System.Collections.Specialized.OrderedDictionary]$RequirementRule,
+
         [parameter(Mandatory = $false, ParameterSetName = "MSI", HelpMessage = "Provide a Base64 encoded string as icon for the Win32 application body.")]
         [parameter(Mandatory = $false, ParameterSetName = "EXE")]
         [ValidateNotNullOrEmpty()]
@@ -1786,11 +1868,23 @@ function New-IntuneWin32AppBody {
         [ValidateNotNullOrEmpty()]
         [string]$MSIUpgradeCode
     )
+    # Determine values for requirement rules
+    if ($PSBoundParameters["RequirementRule"]) {
+        $ApplicableArchitectures = $RequirementRule["applicableArchitectures"]
+        $MinimumSupportedOperatingSystem = $RequirementRule["minimumSupportedOperatingSystem"]
+    }
+    else {
+        $ApplicableArchitectures = "x64,x86"
+        $MinimumSupportedOperatingSystem = @{
+            "v10_1607" = $true
+        }
+    }
+
     switch ($PSCmdlet.ParameterSetName) {
         "MSI" {
             $Win32AppBody = [ordered]@{
                 "@odata.type" = "#microsoft.graph.win32LobApp"
-                "applicableArchitectures" = "x64,x86"
+                "applicableArchitectures" = $ApplicableArchitectures
                 "description" = $Description
                 "developer" = $Developer
                 "displayName" = $DisplayName
@@ -1804,9 +1898,7 @@ function New-IntuneWin32AppBody {
                 }
                 "informationUrl" = $null
                 "isFeatured" = $false
-                "minimumSupportedOperatingSystem" = @{
-                    "v10_1607" = $true
-                }
+                "minimumSupportedOperatingSystem" = $MinimumSupportedOperatingSystem
                 "msiInformation" = @{
                     "packageType" = $MSIInstallPurpose
                     "productCode" = $MSIProductCode
@@ -1823,6 +1915,7 @@ function New-IntuneWin32AppBody {
                 "runAs32bit" = $false
             }
 
+            # Add icon property if pass on command line
             if ($PSBoundParameters["Icon"]) {
                 $Win32AppBody.Add("largeIcon", @{
                     "type" = "image/png"
@@ -1858,6 +1951,7 @@ function New-IntuneWin32AppBody {
                 "runAs32bit" = $false
             }
 
+            # Add icon property if pass on command line
             if ($PSBoundParameters["Icon"]) {
                 $Win32AppBody.Add("largeIcon", @{
                     "type" = "image/png"
@@ -1897,7 +1991,7 @@ function Expand-IntuneWin32AppCompressedFile {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify an existing local path to where the win32 app .intunewin file is located.")]
         [ValidateNotNullOrEmpty()]
@@ -1990,7 +2084,7 @@ function New-IntuneWin32AppIcon {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify an existing local path to where the PNG/JPG/JPEG image file is located.")]
         [ValidateNotNullOrEmpty()]
@@ -2046,7 +2140,7 @@ function Get-IntuneWin32AppMetaData {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, HelpMessage = "Specify an existing local path to where the win32 app .intunewin file is located.")]
         [ValidateNotNullOrEmpty()]
@@ -2112,6 +2206,112 @@ function Get-IntuneWin32AppMetaData {
             Write-Warning -Message "An error occurred while attempting to open compressed '$($FilePath)' file. Error message: $($_.Exception.Message)"
         }
     }
+}
+
+function New-IntuneWin32AppRequirementRule {
+    <#
+    .SYNOPSIS
+        Construct a new requirement rule as an optional requirement for Add-IntuneWin32App cmdlet.
+
+    .DESCRIPTION
+        Construct a new requirement rule as an optional requirement for Add-IntuneWin32App cmdlet.
+
+    .PARAMETER Architecture
+        Specify the architecture as a requirement for the Win32 app.
+
+    .PARAMETER MinimumSupportedOperatingSystem
+        Specify the minimum supported operating system version as a requirement for the Win32 app.
+
+    .PARAMETER MinimumFreeDiskSpaceInMB
+        Specify the minimum free disk space in MB as a requirement for the Win32 app.
+
+    .PARAMETER MinimumMemoryInMB
+        Specify the minimum required memory in MB as a requirement for the Win32 app.
+
+    .PARAMETER MinimumNumberOfProcessors
+        Specify the minimum number of required logical processors as a requirement for the Win32 app.
+
+    .PARAMETER MinimumCPUSpeedInMHz
+        Specify the minimum CPU speed in Mhz (as an integer) as a requirement for the Win32 app.
+
+    .NOTES
+        Author:      Nickolaj Andersen
+        Contact:     @NickolajA
+        Created:     2020-01-27
+        Updated:     2020-01-27
+
+        Version history:
+        1.0.0 - (2020-01-27) Function created
+    #>    
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [parameter(Mandatory = $true, HelpMessage = "Specify the architecture as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet("x64", "x86", "All")]
+        [string]$Architecture,
+
+        [parameter(Mandatory = $true, HelpMessage = "Specify the minimum supported operating system version as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet("1607", "1703", "1709", "1803", "1809", "1903")]
+        [string]$MinimumSupportedOperatingSystem,
+
+        [parameter(Mandatory = $false, HelpMessage = "Specify the minimum free disk space in MB as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [int]$MinimumFreeDiskSpaceInMB,
+
+        [parameter(Mandatory = $false, HelpMessage = "Specify the minimum required memory in MB as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [int]$MinimumMemoryInMB,
+
+        [parameter(Mandatory = $false, HelpMessage = "Specify the minimum number of required logical processors as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [int]$MinimumNumberOfProcessors,
+
+        [parameter(Mandatory = $false, HelpMessage = "Specify the minimum CPU speed in Mhz (as an integer) as a requirement for the Win32 app.")]
+        [ValidateNotNullOrEmpty()]
+        [int]$MinimumCPUSpeedInMHz
+    )
+    # Construct table for supported architectures
+    $ArchitectureTable = @{
+        "x64" = "x64"
+        "x86" = "x86"
+        "All" = "x64,x86"
+    }
+
+    # Construct table for supported operating systems
+    $OperatingSystemTable = @{
+        "1607" = "v10_1607"
+        "1703" = "v10_1703"
+        "1709" = "v10_1709"
+        "1803" = "v10_1803"
+        "1809" = "v10_1809"
+        "1903" = "v10_1903"
+        #"1909" = "v10_1909"
+    }
+
+    # Construct ordered hash-table with least amount of required properties for default requirement rule
+    $RequirementRule = [ordered]@{
+        "applicableArchitectures" = $ArchitectureTable[$Architecture]
+        "minimumSupportedOperatingSystem" = @{
+            $OperatingSystemTable[$MinimumSupportedOperatingSystem] = $true
+        }
+    }
+
+    # Add additional requirement rule details if specified on command line
+    if ($PSBoundParameters["MinimumFreeDiskSpaceInMB"]) {
+        $RequirementRule.Add("minimumFreeDiskSpaceInMB", $MinimumFreeDiskSpaceInMB)
+    }
+    if ($PSBoundParameters["MinimumMemoryInMB"]) {
+        $RequirementRule.Add("minimumMemoryInMB", $MinimumMemoryInMB)
+    }
+    if ($PSBoundParameters["MinimumNumberOfProcessors"]) {
+        $RequirementRule.Add("minimumNumberOfProcessors", $MinimumNumberOfProcessors)
+    }
+    if ($PSBoundParameters["MinimumCPUSpeedInMHz"]) {
+        $RequirementRule.Add("minimumCpuSpeedInMHz", $MinimumCPUSpeedInMHz)
+    }
+
+    return $RequirementRule
 }
 
 function New-IntuneWin32AppDetectionRule {
@@ -2188,7 +2388,7 @@ function New-IntuneWin32AppDetectionRule {
         Version history:
         1.0.0 - (2020-01-04) Function created
     #>
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [parameter(Mandatory = $true, ParameterSetName = "MSI", HelpMessage = "Define that the detection rule will be MSI based.")]
         [switch]$MSI,
