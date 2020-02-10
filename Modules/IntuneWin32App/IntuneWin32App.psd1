@@ -29,7 +29,7 @@ CompanyName = 'SCConfigMgr.com'
 Copyright = '(c) 2020 Nickolaj Andersen. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Provides a set of functions to package and add an Intune Win32 app to Microsoft Endpoint Manager (Intune).'
+Description = 'Provides a set of functions to package and add a Win32 app to Microsoft Endpoint Manager (Intune).'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '5.0'
