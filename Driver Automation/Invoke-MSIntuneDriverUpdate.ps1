@@ -302,7 +302,7 @@ function FindLenovoDriver {
 	
 	#Get the content of the website
 	try {
-		$html = Invoke-WebRequest –Uri $URI
+		$html = Invoke-WebRequest -Uri $URI
 	}
 	catch {
 		global:Write-CMLogEntry -Value "Error: $($_.Exception.Message)" -Severity 3
@@ -664,7 +664,7 @@ function InitiateDownloads {
 				if ($ComputerManufacturer -eq "Hewlett-Packard") {
 					global:Write-CMLogEntry -Value "$($Product): Extracting $ComputerManufacturer drivers to $HPTemp" -Severity 1
 					# Driver Silent Extract Switches
-					$HPSilentSwitches = "-PDF -F" + "$DriverExtractDest" + " -S -E"
+					$HPSilentSwitches = "/s /e /f `"$($DriverExtractDest)`""
 					global:Write-CMLogEntry -Value "$($Product): Using $ComputerManufacturer silent switches: $HPSilentSwitches" -Severity 1
 					Start-Process -FilePath "$($TempDirectory + '\Driver Cab\' + $DriverCab)" -ArgumentList $HPSilentSwitches -Verb RunAs
 					$DriverProcess = ($DriverCab).Substring(0, $DriverCab.length - 4)
@@ -721,7 +721,7 @@ function Update-Drivers {
 	try {
 		if ((Get-ChildItem -Path $DriverPackagePath -Filter *.inf -Recurse).count -gt 0) {
 			try {
-				Start-Process "$env:WINDIR\sysnative\windowspowershell\v1.0\powershell.exe" -WorkingDirectory $DriverPackagePath -ArgumentList "pnputil /add-driver *.inf /subdirs /install | Out-File -FilePath (Join-Path $LogDirectory '\Install-Drivers.txt') -Append" -NoNewWindow -Wait
+				Start-Process "powershell.exe" -WorkingDirectory $DriverPackagePath -ArgumentList "pnputil /add-driver *.inf /subdirs /install | Out-File -FilePath (Join-Path $LogDirectory '\Install-Drivers.txt') -Append" -NoNewWindow -Wait
 				Write-CMLogEntry -Value "Driver installation complete. Restart required" -Severity 1
 			}
 			catch [System.Exception]
