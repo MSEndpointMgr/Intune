@@ -19,10 +19,11 @@ function Get-AuthToken {
         Author:      Nickolaj Andersen
         Contact:     @NickolajA
         Created:     2020-01-04
-        Updated:     2020-01-04
+        Updated:     2020-03-11
 
         Version history:
         1.0.0 - (2020-01-04) Function created
+        1.0.1 - (2020-03-11) Improved output for attempting to update the PSIntuneAuth module
     #>    
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -45,10 +46,13 @@ function Get-AuthToken {
         $PSIntuneAuthModule = Get-InstalledModule -Name "PSIntuneAuth" -ErrorAction Stop -Verbose:$false
         if ($PSIntuneAuthModule -ne $null) {
             Write-Verbose -Message "Authentication module detected, checking for latest version"
-            $LatestModuleVersion = (Find-Module -Name "PSIntuneAuth" -ErrorAction Stop -Verbose:$false).Version
+            $LatestModuleVersion = (Find-Module -Name "PSIntuneAuth" -ErrorAction SilentlyContinue -Verbose:$false).Version
             if ($LatestModuleVersion -gt $PSIntuneAuthModule.Version) {
                 Write-Verbose -Message "Latest version of PSIntuneAuth module is not installed, attempting to install: $($LatestModuleVersion.ToString())"
                 $UpdateModuleInvocation = Update-Module -Name "PSIntuneAuth" -Scope "AllUsers" -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+            }
+            else {
+                Write-Warning -Message "Failed to determine if an update to the PSIntuneAuth module is necessary, will continue"
             }
         }
     }

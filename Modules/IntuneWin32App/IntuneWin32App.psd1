@@ -11,7 +11,7 @@
 RootModule = 'IntuneWin32App.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.1.0'
+ModuleVersion = '1.1.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -29,7 +29,7 @@ CompanyName = 'SCConfigMgr.com'
 Copyright = '(c) 2020 Nickolaj Andersen. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Provides a set of functions to package and add a Win32 app to Microsoft Endpoint Manager (Intune).'
+Description = 'Provides a set of functions to package and add an Intune Win32 app to Microsoft Endpoint Manager (Intune).'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '5.0'
@@ -109,7 +109,7 @@ PrivateData = @{
         # LicenseUri = ''
 
         # A URL to the main website for this project.
-        ProjectUri = 'https://github.com/SCConfigMgr/Intune/tree/master/Modules/IntuneWin32App'
+        ProjectUri = 'https://github.com/MSEndpointMgr/Intune/tree/master/Modules/IntuneWin32App'
 
         # A URL to an icon representing this module.
         # IconUri = ''

@@ -1,5 +1,8 @@
 # Release notes for IntuneWin32App module
 
+## 1.1.1
+- Improved output for attempting to update the PSIntuneAuth module in the internal Get-AuthToken function.
+
 ## 1.1.0
 - Added a new function called Get-MSIMetaData to retrieve MSI file properties like ProductCode and more.
 - Added a new function called New-IntuneWin32AppRequirementRule to create a customized requirement rule for the Win32 app. This function does not support 'Additional requirement rules' as of yet, but will be implemented in a future version.
