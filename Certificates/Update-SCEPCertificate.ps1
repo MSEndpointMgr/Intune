@@ -10,10 +10,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-12-21
-    Updated:     2019-12-21
+    Updated:     2020-04-24
 
     Version history:
     1.0.0 - (2019-12-21) Script created
+    1.0.1 - (2020-04-24) Added to check for certificate with subject names matching CN=WIN in addition to CN=DESKTOP and CN=LAPTOP
 #>
 Process {
     # Functions
@@ -76,7 +77,7 @@ Process {
 
     function Get-SCEPCertificate {
         do {
-            $SCEPCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" | Where-Object { ($_.Subject -match "CN=DESKTOP") -or ($_.Subject -match "CN=LAPTOP") }
+            $SCEPCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" | Where-Object { ($_.Subject -match "CN=DESKTOP") -or ($_.Subject -match "CN=LAPTOP") -or ($_.Subject -match "CN=WIN") }
             if ($SCEPCertificate -eq $null) {
                 Write-CMLogEntry -Value "Unable to locate SCEP certificate, waiting 10 seconds before checking again" -Severity 2
                 Start-Sleep -Seconds 10
@@ -118,7 +119,7 @@ Process {
         until ($SCEPCertificateInstallEvent -ne $null)
         Write-CMLogEntry -Value "SCEP certificate was successfully installed after a manual MDM policy sync, proceeding to validate it's subject name" -Severity 1
 
-        # Attempt to locate SCEP issued certificate where the subject name matches either 'DESKTOP' or 'LAPTOP'
+        # Attempt to locate SCEP issued certificate where the subject name matches either 'DESKTOP', 'LAPTOP' or 'WIN'
         $SubjectNames = $Subject -join "|"
         $SCEPCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" | Where-Object { $_.Subject -match $SubjectNames }
         if ($SCEPCertificate -eq $null) {
@@ -134,10 +135,10 @@ Process {
     # Define the desired subject name matching patterns for a successful SCEP certificate installation
     $SubjectNames = @("CN=CL", "CN=CORP")
 
-    # Attempt to locate and wait for SCEP issued certificate where the subject name matches either 'DESKTOP' or 'LAPTOP'
+    # Attempt to locate and wait for SCEP issued certificate where the subject name matches either 'DESKTOP', 'LAPTOP' or 'WIN'
     $SCEPCertificateItem = Get-SCEPCertificate
     if ($SCEPCertificateItem -ne $null) {
-        # Remove existing SCEP issues certificate with subject name matching either 'DESKTOP' or 'LAPTOP'
+        # Remove existing SCEP issues certificate with subject name matching either 'DESKTOP', 'LAPTOP' or 'WIN'
         Remove-SCEPCertificate -InputObject $SCEPCertificateItem
 
         # Validate that new certificate was installed and it contains the correct subject name
