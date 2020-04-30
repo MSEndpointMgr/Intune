@@ -11,7 +11,7 @@
 RootModule = 'IntuneWin32App.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.1.1'
+ModuleVersion = '1.2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -23,7 +23,7 @@ GUID = '2554f0a2-8047-49a1-bf6e-0108dc9263dc'
 Author = 'Nickolaj Andersen'
 
 # Company or vendor of this module
-CompanyName = 'SCConfigMgr.com'
+CompanyName = 'MSEndpointMgr.com'
 
 # Copyright statement for this module
 Copyright = '(c) 2020 Nickolaj Andersen. All rights reserved.'
@@ -78,7 +78,9 @@ FunctionsToExport = @('Get-IntuneWin32App',`
                       'New-IntuneWin32AppIcon',`
                       'Expand-IntuneWin32AppPackage',`
                       'Get-MSIMetaData',`
-                      "New-IntuneWin32AppRequirementRule"
+                      "New-IntuneWin32AppRequirementRule",
+                      "Get-IntuneWin32AppAssignment",
+                      "Remove-IntuneWin32AppAssignment"
 )
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
