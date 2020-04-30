@@ -456,7 +456,7 @@ function Add-IntuneWin32AppAssignment {
         Specify the ID for a Win32 application.
 
     .PARAMETER Target
-        Specify the target of the assignment, either AllUsers or Group.
+        Specify the target of the assignment, either AllUsers, AllDevices or Group.
 
     .PARAMETER Intent
         Specify the intent of the assignment, either required or available.
@@ -481,6 +481,7 @@ function Add-IntuneWin32AppAssignment {
 
         Version history:
         1.0.0 - (2020-01-04) Function created
+        1.0.1 - (2020-04-29) Added support for AllDevices target assignment type
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -497,10 +498,10 @@ function Add-IntuneWin32AppAssignment {
         [ValidateNotNullOrEmpty()]
         [string]$ID,
 
-        [parameter(Mandatory = $true, ParameterSetName = "DisplayName", HelpMessage = "Specify the target of the assignment, either AllUsers or Group.")]
+        [parameter(Mandatory = $true, ParameterSetName = "DisplayName", HelpMessage = "Specify the target of the assignment, either AllUsers, AllDevices or Group.")]
         [parameter(Mandatory = $true, ParameterSetName = "ID")]
         [ValidateNotNullOrEmpty()]
-        [ValidateSet("AllUsers", "Group")]
+        [ValidateSet("AllUsers", "AllDevices", "Group")]
         [string]$Target,
 
         [parameter(Mandatory = $false, ParameterSetName = "DisplayName", HelpMessage = "Specify the intent of the assignment, either required or available.")]
@@ -577,6 +578,11 @@ function Add-IntuneWin32AppAssignment {
                 "AllUsers" {
                     $TargetAssignment = @{
                         "@odata.type" = "#microsoft.graph.allLicensedUsersAssignmentTarget"
+                    }                    
+                }
+                "AllDevices" {
+                    $TargetAssignment = @{
+                        "@odata.type" = "#microsoft.graph.allDevicesAssignmentTarget"
                     }                    
                 }
                 "Group" {
