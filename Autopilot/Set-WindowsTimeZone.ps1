@@ -15,10 +15,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-05-19
-    Updated:     2020-05-19
+    Updated:     2020-05-23
 
     Version history:
     1.0.0 - (2020-05-19) Script created
+    1.0.1 - (2020-05-23) Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -138,6 +139,12 @@ Process {
         }
         
         $LocationServiceStatusRegValue = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
+        Write-LogEntry -Value "Checking registry key presence: $($LocationServiceStatusRegValue)" -Severity 1
+        if (-not(Test-Path -Path $LocationServiceStatusRegValue)) {
+            Write-LogEntry -Value "Presence of '$($LocationServiceStatusRegValue)' key was not detected, attempting to create it" -Severity 1
+            New-Item -Path $LocationServiceStatusRegValue -Force | Out-Null
+        }
+
         $LocationServiceStatusValue = Get-ItemPropertyValue -Path $LocationServiceStatusRegValue -Name "Status"
         Write-LogEntry -Value "Checking registry value 'Status' configuration in key: $($LocationServiceStatusRegValue)" -Severity 1
         if ($LocationServiceStatusValue -ne 1) {
@@ -189,7 +196,7 @@ Process {
                             $AzureMapsWindowsEnumURI = "https://atlas.microsoft.com/timezone/enumWindows/json?subscription-key=$($AzureMapsSharedKey)&api-version=1.0"
                             $AzureMapsWindowsEnumResponse = Invoke-RestMethod -Uri $AzureMapsWindowsEnumURI -Method "Get" -ErrorAction Stop
                             if ($AzureMapsWindowsEnumResponse -ne $null) {
-                                $TimeZoneID = $AzureMapsWindowsEnumResponse | Where-Object { $PSItem.IanaIds -like $IANATimeZoneValue } | Select-Object -ExpandProperty WindowsId
+                                $TimeZoneID = $AzureMapsWindowsEnumResponse | Where-Object { ($PSItem.IanaIds -like $IANATimeZoneValue) -and ($PSItem.Territory.Length -eq 2) } | Select-Object -ExpandProperty WindowsId
                                 Write-LogEntry -Value "Successfully determined the Windows time zone id: $($TimeZoneID)" -Severity 1
 
                                 try {
