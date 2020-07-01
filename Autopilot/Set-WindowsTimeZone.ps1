@@ -145,11 +145,18 @@ Process {
             New-Item -Path $LocationServiceStatusRegValue -Force | Out-Null
         }
 
-        $LocationServiceStatusValue = Get-ItemPropertyValue -Path $LocationServiceStatusRegValue -Name "Status"
-        Write-LogEntry -Value "Checking registry value 'Status' configuration in key: $($LocationServiceStatusRegValue)" -Severity 1
-        if ($LocationServiceStatusValue -ne 1) {
-            Write-LogEntry -Value "Registry value 'Status' configuration mismatch detected, setting value to: 1" -Severity 1
-            Set-ItemProperty -Path $LocationServiceStatusRegValue -Name "Status" -Type "DWord" -Value 1 -Force
+        $LocationServiceStatusRegDWORD = Get-ItemProperty -Path $LocationServiceStatusRegValue -Name "Status" -ErrorAction SilentlyContinue
+        if (!$LocationServiceStatusRegDWORD) {
+            Write-LogEntry -Value "Presence of 'Status' was not detected in key: $LocationServiceStatusRegValue, attempting to create it" -Severity 1
+            New-ItemProperty -Path $LocationServiceStatusRegValue -Name "Status" -Type "DWord" -Value 1 -Force
+        }
+        else {
+            $LocationServiceStatusValue = Get-ItemPropertyValue -Path $LocationServiceStatusRegValue -Name "Status" -ErrorAction SilentlyContinue
+            Write-LogEntry -Value "Checking registry value 'Status' configuration in key: $($LocationServiceStatusRegValue)" -Severity 1
+            if ($LocationServiceStatusValue -ne 1) {
+                Write-LogEntry -Value "Registry value 'Status' configuration mismatch detected, setting value to: 1" -Severity 1
+                Set-ItemProperty -Path $LocationServiceStatusRegValue -Name "Status" -Type "DWord" -Value 1 -Force
+            }
         }
 
         $LocationService = Get-Service -Name "lfsvc"
