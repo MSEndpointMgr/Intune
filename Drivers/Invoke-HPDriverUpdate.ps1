@@ -93,7 +93,38 @@ Process {
 		catch [System.Exception] {
 			Write-Warning -Message "Unable to append log entry to HPDriverUpdate.log file. Error message at line $($_.InvocationInfo.ScriptLineNumber): $($_.Exception.Message)"
 		}
-	}
+    }
+    
+    function Set-RegistryValue {
+        param(
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Path,
+    
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Name,        
+    
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Value
+        )
+        try {
+            $RegistryValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+            if ($RegistryValue -ne $null) {
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force -ErrorAction Stop
+            }
+            else {
+                if (-not(Test-Path -Path $Path)) {
+                    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+                }
+                New-ItemProperty -Path $Path -Name $Name -PropertyType String -Value $Value -Force -ErrorAction Stop
+            }
+        }
+        catch [System.Exception] {
+            Write-Warning -Message "Failed to create or update registry value '$($Name)' in '$($Path)'. Error message: $($_.Exception.Message)"
+        }
+    }
 
     function Invoke-Executable {
         param (
@@ -207,10 +238,7 @@ Process {
                     # Invoke executing script again in Execute run mode after package provider and modules have been installed/updated
                     Write-LogEntry -Value "Re-launching the PowerShell instance in Execute mode to overcome a bug with PowerShellGet" -Severity 1
                     $Invocation = Invoke-Executable -FilePath "powershell.exe" -Arguments "-ExecutionPolicy Bypass -NoProfile -File $($env:SystemRoot)\Temp\$($MyInvocation.MyCommand.Name) -RunMode Execute"
-                    if ($Invocation -eq 0) {
-                        Write-LogEntry -Value "Successfully installed the latest drivers and driver software" -Severity 1
-                    }
-                    else {
+                    if ($Invocation -ne 0) {
                         Write-LogEntry -Value "Re-launched PowerShell instance failed with exit code: $($Invocation)" -Severity 3
                     }
                 }
@@ -236,14 +264,14 @@ Process {
                 }
 
                 # Create HP logs for HP Image Assistant
-                $HPImageAssistantReportPath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HP\Logs"
+                $HPImageAssistantReportPath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPIALogs"
                 if (-not(Test-Path -Path $HPImageAssistantReportPath)) {
                     Write-LogEntry -Value "Creating directory for HP Image Assistant report logs: $($HPImageAssistantReportPath)" -Severity 1
                     New-Item -Path $HPImageAssistantReportPath -ItemType "Directory" -Force | Out-Null
                 }
 
                 # Create HP Drivers directory for driver content
-                $SoftpaqDownloadPath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HP\Drivers"
+                $SoftpaqDownloadPath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPDrivers"
                 if (-not(Test-Path -Path $SoftpaqDownloadPath)) {
                     Write-LogEntry -Value "Creating directory for softpaq downloads: $($SoftpaqDownloadPath)" -Severity 1
                     New-Item -Path $SoftpaqDownloadPath -ItemType "Directory" -Force | Out-Null
@@ -262,13 +290,36 @@ Process {
                         # Invoke HP Image Assistant to install drivers and driver software
                         $HPImageAssistantExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPIA\HPImageAssistant.exe"
                         Write-LogEntry -Value "Attempting to execute HP Image Assistant to install drivers and driver software, this might take some time" -Severity 1
-                        $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments "/Operation:Analyze /Action:Install /Selection:All /Silent /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)" -ErrorAction Stop
-                        Write-LogEntry -Value "Exit code from HPImageAssistant.exe: $($Invocation)" -Severity 1
+                        $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments "/Operation:Analyze /Action:Install /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)" -ErrorAction Stop
+
+                        # Add a registry key for Win32 app detection rule based on HP Image Assistant exit code
+                        switch ($Invocation) {
+                            0 {
+                                Write-LogEntry -Value "HP Image Assistant returned successful exit code: $($Invocation)" -Severity 1
+                                Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
+                            }
+                            256 { # The analysis returned no recommendations
+                                Write-LogEntry -Value "HP Image Assistant returned there were no recommendations for this system, exit code: $($Invocation)" -Severity 1
+                                Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
+                            }
+                            3010 { # Softpaqs installations are successful, but at least one requires a restart
+                                Write-LogEntry -Value "HP Image Assistant returned successful exit code: $($Invocation)" -Severity 1
+                                Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
+                            }
+                            3020 { # One or more Softpaq's failed to install
+                                Write-LogEntry -Value "HP Image Assistant did not install one or more softpaqs successfully, examine the Readme*.html file in: $($HPImageAssistantReportPath)" -Severity 2
+                                Write-LogEntry -Value "HP Image Assistant returned successful exit code: $($Invocation)" -Severity 1
+                                Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
+                            }
+                            default {
+                                Write-LogEntry -Value "HP Image Assistant returned unhandled exit code: $($Invocation)" -Severity 3
+                                Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Failed" -ErrorAction Stop
+                            }
+                        }
 
                         # Cleanup downloaded softpaq executable that was extracted
-                        $SoftpaqDownloadPathParent = Split-Path -Path $SoftpaqDownloadPath -Parent
-                        Write-LogEntry -Value "Attempting to cleanup directory for downloaded softpaqs: $($SoftpaqDownloadPathParent)" -Severity 1
-                        Remove-Item -Path $SoftpaqDownloadPathParent -Force -Recurse -Confirm:$false
+                        Write-LogEntry -Value "Attempting to cleanup directory for downloaded softpaqs: $($SoftpaqDownloadPath)" -Severity 1
+                        Remove-Item -Path $SoftpaqDownloadPath -Force -Recurse -Confirm:$false
 
                         # Cleanup extracted HPIA directory
                         Write-LogEntry -Value "Attempting to cleanup extracted HP Image Assistant directory: $($HPImageAssistantExtractPath)" -Severity 1
