@@ -262,7 +262,8 @@ Process {
                         # Invoke HP Image Assistant to install drivers and driver software
                         $HPImageAssistantExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPIA\HPImageAssistant.exe"
                         Write-LogEntry -Value "Attempting to execute HP Image Assistant to install drivers and driver software, this might take some time" -Severity 1
-                        Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments "/Operation:Analyze /Action:Install /Selection:All /Silent /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)" -ErrorAction Stop
+                        $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments "/Operation:Analyze /Action:Install /Selection:All /Silent /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)" -ErrorAction Stop
+                        Write-LogEntry -Value "Exit code from HPImageAssistant.exe: $($Invocation)" -Severity 1
 
                         # Cleanup downloaded softpaq executable that was extracted
                         $SoftpaqDownloadPathParent = Split-Path -Path $SoftpaqDownloadPath -Parent
