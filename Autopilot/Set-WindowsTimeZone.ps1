@@ -15,11 +15,12 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-05-19
-    Updated:     2020-05-23
+    Updated:     2020-09-10
 
     Version history:
-    1.0.0 - (2020-05-19) Script created
-    1.0.1 - (2020-05-23) Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
+    1.0.0 - (2020-05-19) - Script created
+    1.0.1 - (2020-05-23) - Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
+    1.0.2 - (2020-09-10) - Improved registry key handling for enabling location services
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -115,42 +116,73 @@ Process {
         return $Coordinates
     }
 
-    function Enable-LocationServices {
-        $LocationConsentKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location"
-        Write-LogEntry -Value "Checking registry key presence: $($LocationConsentKey)" -Severity 1
-        if (-not(Test-Path -Path $LocationConsentKey)) {
-            Write-LogEntry -Value "Presence of '$($LocationConsentKey)' key was not detected, attempting to create it" -Severity 1
-            New-Item -Path $LocationConsentKey -Force | Out-Null
+    function New-RegistryKey {
+        param(
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Path
+        )
+        try {
+            Write-LogEntry -Value "Checking presence of registry key: $($Path)" -Severity 1
+            if (-not(Test-Path -Path $Path)) {
+                Write-LogEntry -Value "Attempting to create registry key: $($Path)" -Severity 1
+                New-Item -Path $Path -ItemType "Directory" -Force -ErrorAction Stop | Out-Null
+            }
         }
-        
-        $LocationConsentValue = Get-ItemPropertyValue -Path $LocationConsentKey -Name "Value"
-        Write-LogEntry -Value "Checking registry value 'Value' configuration in key: $($LocationConsentKey)" -Severity 1
-        if ($LocationConsentValue -notlike "Allow") {
-            Write-LogEntry -Value "Registry value 'Value' configuration mismatch detected, setting value to: Allow" -Severity 1
-            Set-ItemProperty -Path $LocationConsentKey -Name "Value" -Type "String" -Value "Allow" -Force
+        catch [System.Exception] {
+            Write-LogEntry -Value "Failed to create registry key '$($Path)'. Error message: $($_.Exception.Message)" -Severity 3
         }
-        
-        $SensorPermissionStateRegValue = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}"
-        $SensorPermissionStateValue = Get-ItemPropertyValue -Path $SensorPermissionStateRegValue -Name "SensorPermissionState"
-        Write-LogEntry -Value "Checking registry value 'SensorPermissionState' configuration in key: $($SensorPermissionStateRegValue)" -Severity 1
-        if ($SensorPermissionStateValue -ne 1) {
-            Write-LogEntry -Value "Registry value 'SensorPermissionState' configuration mismatch detected, setting value to: 1" -Severity 1
-            Set-ItemProperty -Path $SensorPermissionStateRegValue -Name "SensorPermissionState" -Type "DWord" -Value 1 -Force
-        }
-        
-        $LocationServiceStatusRegValue = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
-        Write-LogEntry -Value "Checking registry key presence: $($LocationServiceStatusRegValue)" -Severity 1
-        if (-not(Test-Path -Path $LocationServiceStatusRegValue)) {
-            Write-LogEntry -Value "Presence of '$($LocationServiceStatusRegValue)' key was not detected, attempting to create it" -Severity 1
-            New-Item -Path $LocationServiceStatusRegValue -Force | Out-Null
-        }
+    }
 
-        $LocationServiceStatusValue = Get-ItemPropertyValue -Path $LocationServiceStatusRegValue -Name "Status"
-        Write-LogEntry -Value "Checking registry value 'Status' configuration in key: $($LocationServiceStatusRegValue)" -Severity 1
-        if ($LocationServiceStatusValue -ne 1) {
-            Write-LogEntry -Value "Registry value 'Status' configuration mismatch detected, setting value to: 1" -Severity 1
-            Set-ItemProperty -Path $LocationServiceStatusRegValue -Name "Status" -Type "DWord" -Value 1 -Force
+    function Set-RegistryValue {
+        param(
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Path,
+    
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Name,        
+    
+            [parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            [string]$Value,
+
+            [parameter(Mandatory=$false)]
+            [ValidateNotNullOrEmpty()]
+            [ValidateSet("String", "ExpandString", "Binary", "DWord", "MultiString", "Qword")]
+            [string]$Type = "String"
+        )
+        try {
+            Write-LogEntry -Value "Checking presence of registry value '$($Name)' in registry key: $($Path)" -Severity 1
+            $RegistryValue = Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction SilentlyContinue
+            if ($RegistryValue -ne $null) {
+                Write-LogEntry -Value "Setting registry value '$($Name)' to: $($Value)" -Severity 1
+                Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force -ErrorAction Stop
+            }
+            else {
+                New-RegistryKey -Path $Path -ErrorAction Stop
+                Write-LogEntry -Value "Setting registry value '$($Name)' to: $($Value)" -Severity 1
+                New-ItemProperty -Path $Path -Name $Name -PropertyType $Type -Value $Value -Force -ErrorAction Stop | Out-Null
+            }
         }
+        catch [System.Exception] {
+            Write-LogEntry -Value "Failed to create or update registry value '$($Name)' in '$($Path)'. Error message: $($_.Exception.Message)" -Severity 3
+        }
+    }
+
+    function Enable-LocationServices {
+        $AppsAccessLocation = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy"
+        Set-RegistryValue -Path $AppsAccessLocation -Name "LetAppsAccessLocation" -Value 0 -Type "DWord"
+
+        $LocationConsentKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location"
+        Set-RegistryValue -Path $LocationConsentKey -Name "Value" -Value "Allow" -Type "String"
+
+        $SensorPermissionStateKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}"
+        Set-RegistryValue -Path $SensorPermissionStateKey -Name "SensorPermissionState" -Value 1 -Type "DWord"
+
+        $LocationServiceConfigurationKey = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
+        Set-RegistryValue -Path $LocationServiceConfigurationKey -Name "Status" -Value 1 -Type "DWord"
 
         $LocationService = Get-Service -Name "lfsvc"
         Write-LogEntry -Value "Checking location service 'lfsvc' for status: Running" -Severity 1
