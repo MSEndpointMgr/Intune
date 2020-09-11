@@ -264,7 +264,7 @@ Process {
                     else {
                         try {
                             # PowerShellGet module was not found, attempt to install from repository
-                            Write-LogEntry -Value "PowerShellGet module was not found, will attempting to install it and it's dependencies from repository" -Severity 1
+                            Write-LogEntry -Value "PowerShellGet module was not found, attempting to install it including dependencies from repository" -Severity 1
                             Write-LogEntry -Value "Attempting to install PackageManagement module from repository" -Severity 1
                             Install-Module -Name "PackageManagement" -Force -Scope AllUsers -AllowClobber -ErrorAction Stop -Verbose:$false
                             Write-LogEntry -Value "Attempting to install PowerShellGet module from repository" -Severity 1
