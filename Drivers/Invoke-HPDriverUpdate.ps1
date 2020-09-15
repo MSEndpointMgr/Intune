@@ -20,10 +20,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-08-12
-    Updated:     2020-08-12
+    Updated:     2020-09-15
 
     Version history:
     1.0.0 - (2020-08-12) Script created
+    1.0.1 - (2020-09-15) Added a fix for registering default PSGallery repository if not already registered
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -227,12 +228,15 @@ Process {
         switch ($RunMode) {
             "Stage" {
                 Write-LogEntry -Value "Current script host process is running in 64-bit: $([System.Environment]::Is64BitProcess)" -Severity 1
-       
+
                 try {
                     # Install latest NuGet package provider
                     Write-LogEntry -Value "Attempting to install latest NuGet package provider" -Severity 1
                     $PackageProvider = Install-PackageProvider -Name "NuGet" -Force -ErrorAction Stop -Verbose:$false
     
+                    # Ensure default PSGallery repository is registered
+                    Register-PSRepository -Default -ErrorAction SilentlyContinue
+
                     # Attempt to get the installed PowerShellGet module
                     Write-LogEntry -Value "Attempting to locate installed PowerShellGet module" -Severity 1
                     $PowerShellGetInstalledModule = Get-InstalledModule -Name "PowerShellGet" -ErrorAction SilentlyContinue -Verbose:$false
@@ -264,7 +268,7 @@ Process {
                     else {
                         try {
                             # PowerShellGet module was not found, attempt to install from repository
-                            Write-LogEntry -Value "PowerShellGet module was not found, attempting to install it including dependencies from repository" -Severity 1
+                            Write-LogEntry -Value "PowerShellGet module was not found, will attempting to install it and it's dependencies from repository" -Severity 1
                             Write-LogEntry -Value "Attempting to install PackageManagement module from repository" -Severity 1
                             Install-Module -Name "PackageManagement" -Force -Scope AllUsers -AllowClobber -ErrorAction Stop -Verbose:$false
                             Write-LogEntry -Value "Attempting to install PowerShellGet module from repository" -Severity 1
