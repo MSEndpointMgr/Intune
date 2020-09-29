@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Download and install the latest set of drivers and driver software from HP repository online using HP Image Assistant for current client device
+    Download and install the latest set of drivers and driver software from HP repository online using HP Image Assistant for current client device.
 
 .DESCRIPTION
     This script will download and install the latest matching drivers and driver software from HP repository online using HP Image Assistant that will
@@ -12,6 +12,9 @@
 .PARAMETER HPIASoftpaqNumber
     Specify the HP Image Assistant softpaq number.
 
+.PARAMETER HPIAAction
+    Specify the HP Image Assistant action to perform, e.g. Download or Install.
+
 .EXAMPLE
     .\Invoke-HPDriverUpdate.ps1 -RunMode "Stage"
 
@@ -20,22 +23,28 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-08-12
-    Updated:     2020-09-15
+    Updated:     2020-09-28
 
     Version history:
     1.0.0 - (2020-08-12) Script created
     1.0.1 - (2020-09-15) Added a fix for registering default PSGallery repository if not already registered
+    1.0.2 - (2020-09-28) Added a new parameter HPIAAction that controls whether to Download or Install applicable drivers
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [parameter(Mandatory = $true, HelpMessage = "Select run mode for this script, either Stage or Execute.")]
     [ValidateNotNullOrEmpty()]
-    [ValidateSet("Stage","Execute")]
+    [ValidateSet("Stage", "Execute")]
     [string]$RunMode,
 
     [parameter(Mandatory = $false, HelpMessage = "Specify the HP Image Assistant softpaq number.")]
     [ValidateNotNullOrEmpty()]
-    [string]$HPIASoftpaqNumber = "sp103654"
+    [string]$HPIASoftpaqNumber = "sp103654",
+
+    [parameter(Mandatory = $false, HelpMessage = "Specify the HP Image Assistant action to perform, e.g. Download or Install.")]
+    [ValidateNotNullOrEmpty()]
+    [ValidateSet("Download", "Install")]
+    [string]$HPIAAction = "Install"
 )
 Begin {
     # Enable TLS 1.2 support for downloading modules from PSGallery
@@ -331,8 +340,25 @@ Process {
                         try {
                             # Invoke HP Image Assistant to install drivers and driver software
                             $HPImageAssistantExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPIA\HPImageAssistant.exe"
+                            switch ($HPIAAction) {
+                                "Download" {
+                                    # Prepare arguments for HP Image Assistant download mode
+                                    $HPImageAssistantArguments = "/Operation:Analyze /Action:Download /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)"
+
+                                    # Set HP Image Assistant operational mode in registry
+                                    Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "OperationalMode" -Value "Download" -ErrorAction Stop
+                                }
+                                "Install" {
+                                    # Prepare arguments for HP Image Assistant download mode
+                                    $HPImageAssistantArguments = "/Operation:Analyze /Action:Install /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)"
+
+                                    # Set HP Image Assistant operational mode in registry
+                                    Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "OperationalMode" -Value "Install" -ErrorAction Stop
+                                }
+                            }
+
                             Write-LogEntry -Value "Attempting to execute HP Image Assistant to install drivers and driver software, this might take some time" -Severity 1
-                            $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments "/Operation:Analyze /Action:Install /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)" -ErrorAction Stop
+                            $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments $HPImageAssistantArguments -ErrorAction Stop
     
                             # Add a registry key for Win32 app detection rule based on HP Image Assistant exit code
                             switch ($Invocation) {
@@ -359,9 +385,11 @@ Process {
                                 }
                             }
     
-                            # Cleanup downloaded softpaq executable that was extracted
-                            Write-LogEntry -Value "Attempting to cleanup directory for downloaded softpaqs: $($SoftpaqDownloadPath)" -Severity 1
-                            Remove-Item -Path $SoftpaqDownloadPath -Force -Recurse -Confirm:$false
+                            if ($HPIAAction -like "Install") {
+                                # Cleanup downloaded softpaq executable that was extracted
+                                Write-LogEntry -Value "Attempting to cleanup directory for downloaded softpaqs: $($SoftpaqDownloadPath)" -Severity 1
+                                Remove-Item -Path $SoftpaqDownloadPath -Force -Recurse -Confirm:$false
+                            }
     
                             # Cleanup extracted HPIA directory
                             Write-LogEntry -Value "Attempting to cleanup extracted HP Image Assistant directory: $($HPImageAssistantExtractPath)" -Severity 1
@@ -371,6 +399,10 @@ Process {
                             $HPImageAssistantSoftpaqExecutable = Join-Path -Path $env:SystemRoot -ChildPath "Temp\$($HPIASoftpaqNumber).exe"
                             Write-LogEntry -Value "Attempting to remove downloaded HP Image Assistant softpaq executable: $($HPImageAssistantSoftpaqExecutable)" -Severity 1
                             Remove-Item -Path $HPImageAssistantSoftpaqExecutable -Force -Confirm:$false
+
+                            # Remove script from Temp directory
+                            Write-LogEntry -Value "Attempting to self-destruct executing script file: $($MyInvocation.MyCommand.Definition)" -Severity 1
+                            Remove-Item -Path $MyInvocation.MyCommand.Definition -Force -Confirm:$false
                         }
                         catch [System.Exception] {
                             Write-LogEntry -Value "Failed to run HP Image Assistant to install drivers and driver software. Error message: $($_.Exception.Message)" -Severity 3; exit 1
