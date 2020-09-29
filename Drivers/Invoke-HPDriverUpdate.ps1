@@ -342,6 +342,8 @@ Process {
                             $HPImageAssistantExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "Temp\HPIA\HPImageAssistant.exe"
                             switch ($HPIAAction) {
                                 "Download" {
+                                    Write-LogEntry -Value "Attempting to execute HP Image Assistant to download drivers including driver software, this might take some time" -Severity 1
+
                                     # Prepare arguments for HP Image Assistant download mode
                                     $HPImageAssistantArguments = "/Operation:Analyze /Action:Download /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)"
 
@@ -349,6 +351,8 @@ Process {
                                     Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "OperationalMode" -Value "Download" -ErrorAction Stop
                                 }
                                 "Install" {
+                                    Write-LogEntry -Value "Attempting to execute HP Image Assistant to download and install drivers including driver software, this might take some time" -Severity 1
+
                                     # Prepare arguments for HP Image Assistant download mode
                                     $HPImageAssistantArguments = "/Operation:Analyze /Action:Install /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)"
 
@@ -357,7 +361,7 @@ Process {
                                 }
                             }
 
-                            Write-LogEntry -Value "Attempting to execute HP Image Assistant to install drivers and driver software, this might take some time" -Severity 1
+                            # Invoke HP Image Assistant
                             $Invocation = Invoke-Executable -FilePath $HPImageAssistantExecutablePath -Arguments $HPImageAssistantArguments -ErrorAction Stop
     
                             # Add a registry key for Win32 app detection rule based on HP Image Assistant exit code
