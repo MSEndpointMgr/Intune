@@ -45,8 +45,10 @@ function Invoke-MSGraphOperation {
 
         Version history:
         1.0.0 - (2020-10-11) Function created
-        1.0.1 - (2020-11-11) Verified
-    #>    
+        1.0.1 - (2020-11-11) Tested in larger environments with 100K+ resources, made small changes to nextLink handling
+        1.0.2 - (2020-12-04) Added support for testing if authentication token has expired, call Get-MsalToken to refresh. This version and onwards now requires the MSAL.PS module
+    #>
+    #Requires -Modules "MSAL.PS"
     param(
         [parameter(Mandatory = $true, ParameterSetName = "GET", HelpMessage = "Switch parameter used to specify the method operation as 'GET'.")]
         [switch]$Get,
@@ -147,6 +149,19 @@ function Invoke-MSGraphOperation {
                     $GraphResponseList.AddRange($GraphResponse.value) | Out-Null
                     $GraphURI = $GraphResponse.'@odata.nextLink'
                     Write-Verbose -Message "NextLink: $($GraphURI)"
+
+                    # Determine the current time in UTC
+                    $UTCDateTime = (Get-Date).ToUniversalTime()
+
+                    # Determine the token expiration count as minutes
+                    $TokenExpireMins = ($Script:AuthToken.ExpiresOn.datetime - $UTCDateTime).Minutes
+
+                    # Attempt to retrieve a refresh token when token expiration count is less than or equals to 0
+                    if ($TokenExpireMins -le 0) {
+                        Write-Verbose -Message "Existing token found but has expired, requesting a new token"
+                        $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
+                        $Headers = New-AuthenticationHeader -AccessToken $AccessToken
+                    }
                 }
                 else {
                     # NextLink from response was null, assuming last page but also handle if a single instance is returned
@@ -208,21 +223,47 @@ function Invoke-MSGraphOperation {
     }
 }
 
-# Install PSIntuneAuth module
-Install-Module -Name "PSIntuneAuth"
+function New-AuthenticationHeader {
+    param(
+        [parameter(Mandatory = $true, HelpMessage = "Pass the AuthenticationResult object returned from Get-MsalToken cmdlet.")]
+        [ValidateNotNullOrEmpty()]
+        [Microsoft.Identity.Client.AuthenticationResult]$AccessToken
+    )
+    Process {
+        # Construct default header parameters
+        $AuthenticationHeader = @{
+            "Content-Type" = "application/json"
+            "Authorization" = $AccessToken.CreateAuthorizationHeader()
+            "ExpiresOn" = $AccessToken.ExpiresOn.LocalDateTime
+        }
+
+        # Amend header with additional required parameters for bitLocker/recoveryKeys resource query
+        $AuthenticationHeader.Add("ocp-client-name", "My App")
+        $AuthenticationHeader.Add("ocp-client-version", "1.0")
+
+        # Handle return value
+        return $AuthenticationHeader
+    }
+}
+
+# Install MSAL.PS module
+Install-Module -Name "MSAL.PS"
+
+# Authentication variables
+$TenantID = "<tenant_id>"
+$ClientID = "<client_id>"
 
 # Get authentication token
-$AuthToken = Get-MSIntuneAuthToken -TenantName "<tenant_name>.onmicrosoft.com" -ClientID "<client_id>" -PromptBehavior "Always"
+$AccessToken = Get-MsalToken -TenantId $TenantID -ClientId $ClientID
 
-# Amend header with additional required parameters for bitLocker/recoveryKeys resource query
-$AuthToken.Add("ocp-client-name", "My App")
-$AuthToken.Add("ocp-client-version", "1.0")
+# Construct authentication header
+$AuthenticationHeader = New-AuthenticationHeader -AccessToken $AccessToken
 
 # Retrieve all available BitLocker recovery keys, select only desired properties
-$BitLockerRecoveryKeys = Invoke-MSGraphOperation -Get -APIVersion "Beta" -Resource "bitlocker/recoveryKeys?`$select=id,createdDateTime,deviceId" -Headers $AuthToken -Verbose
+$BitLockerRecoveryKeys = Invoke-MSGraphOperation -Get -APIVersion "Beta" -Resource "bitlocker/recoveryKeys?`$select=id,createdDateTime,deviceId" -Headers $AuthenticationHeader -Verbose
 
 # Retrieve all managed Windows devices in Intune
-$ManagedDevices = Invoke-MSGraphOperation -Get -APIVersion "v1.0" -Resource "deviceManagement/managedDevices?`$filter=operatingSystem eq 'Windows'&select=azureADDeviceId&`$select=azureADDeviceId,deviceName" -Headers $AuthToken -Verbose
+$ManagedDevices = Invoke-MSGraphOperation -Get -APIVersion "v1.0" -Resource "deviceManagement/managedDevices?`$filter=operatingSystem eq 'Windows'&select=azureADDeviceId&`$select=azureADDeviceId,deviceName" -Headers $AuthenticationHeader -Verbose
 
 # Select only managed devices that doesn't have a recovery key
 $ManagedDevices | Where-Object { $PSItem.azureADDeviceId -notin $BitLockerRecoveryKeys.deviceId }
