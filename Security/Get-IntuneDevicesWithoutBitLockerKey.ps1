@@ -212,7 +212,7 @@ function Invoke-MSGraphOperation {
 Install-Module -Name "PSIntuneAuth"
 
 # Get authentication token
-$AuthToken = Get-MSIntuneAuthToken -TenantName "<tenantname>.onmicrosoft.com" -ClientID "17db31a4-99ec-47b4-840c-88de0c9e56ce" -PromptBehavior Always
+$AuthToken = Get-MSIntuneAuthToken -TenantName "<tenant_name>.onmicrosoft.com" -ClientID "<client_id>" -PromptBehavior "Always"
 
 # Amend header with additional required parameters for bitLocker/recoveryKeys resource query
 $AuthToken.Add("ocp-client-name", "My App")
