@@ -117,6 +117,19 @@ function Invoke-MSGraphOperation {
         # Call Graph API and get JSON response
         do {
             try {
+                # Determine the current time in UTC
+                $UTCDateTime = (Get-Date).ToUniversalTime()
+
+                # Determine the token expiration count as minutes
+                $TokenExpireMins = ([datetime]$Headers["ExpiresOn"] - $UTCDateTime).Minutes
+
+                # Attempt to retrieve a refresh token when token expiration count is less than or equals to 0
+                if ($TokenExpireMins -le 0) {
+                    Write-Verbose -Message "Existing token found but has expired, requesting a new token"
+                    $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
+                    $Headers = New-AuthenticationHeader -AccessToken $AccessToken
+                }
+
                 # Construct table of default request parameters
                 $RequestParams = @{
                     "Uri" = $GraphURI
@@ -149,19 +162,6 @@ function Invoke-MSGraphOperation {
                     $GraphResponseList.AddRange($GraphResponse.value) | Out-Null
                     $GraphURI = $GraphResponse.'@odata.nextLink'
                     Write-Verbose -Message "NextLink: $($GraphURI)"
-
-                    # Determine the current time in UTC
-                    $UTCDateTime = (Get-Date).ToUniversalTime()
-
-                    # Determine the token expiration count as minutes
-                    $TokenExpireMins = ($Script:AuthToken.ExpiresOn.datetime - $UTCDateTime).Minutes
-
-                    # Attempt to retrieve a refresh token when token expiration count is less than or equals to 0
-                    if ($TokenExpireMins -le 0) {
-                        Write-Verbose -Message "Existing token found but has expired, requesting a new token"
-                        $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
-                        $Headers = New-AuthenticationHeader -AccessToken $AccessToken
-                    }
                 }
                 else {
                     # NextLink from response was null, assuming last page but also handle if a single instance is returned
@@ -187,32 +187,40 @@ function Invoke-MSGraphOperation {
                     Start-Sleep -Seconds $RetryInSeconds
                 }
                 else {
-                    # Read the response stream
-                    $StreamReader = New-Object -TypeName "System.IO.StreamReader" -ArgumentList @($ExceptionItem.Exception.Response.GetResponseStream())
-                    $StreamReader.BaseStream.Position = 0
-                    $StreamReader.DiscardBufferedData()
-                    $ResponseBody = ($StreamReader.ReadToEnd() | ConvertFrom-Json)
-                    
-                    switch ($PSCmdlet.ParameterSetName) {
-                        "GET" {
-                            # Output warning message that the request failed with error message description from response stream
-                            Write-Warning -Message "Graph request failed with status code '$($ExceptionItem.Exception.Response.StatusCode)'. Error message: $($ResponseBody.error.message)"
+                    try {
+                        # Read the response stream
+                        $StreamReader = New-Object -TypeName "System.IO.StreamReader" -ArgumentList @($ExceptionItem.Exception.Response.GetResponseStream())
+                        $StreamReader.BaseStream.Position = 0
+                        $StreamReader.DiscardBufferedData()
+                        $ResponseBody = ($StreamReader.ReadToEnd() | ConvertFrom-Json)
+                        
+                        switch ($PSCmdlet.ParameterSetName) {
+                            "GET" {
+                                # Output warning message that the request failed with error message description from response stream
+                                Write-Warning -Message "Graph request failed with status code '$($ExceptionItem.Exception.Response.StatusCode)'. Error message: $($ResponseBody.error.message)"
 
-                            # Set graph response as handled and stop processing loop
-                            $GraphResponseProcess = $false
-                        }
-                        default {
-                            # Construct new custom error record
-                            $SystemException = New-Object -TypeName "System.Management.Automation.RuntimeException" -ArgumentList ("{0}: {1}" -f $ResponseBody.error.code, $ResponseBody.error.message)
-                            $ErrorRecord = New-Object -TypeName "System.Management.Automation.ErrorRecord" -ArgumentList @($SystemException, $ErrorID, [System.Management.Automation.ErrorCategory]::NotImplemented, [string]::Empty)
+                                # Set graph response as handled and stop processing loop
+                                $GraphResponseProcess = $false
+                            }
+                            default {
+                                # Construct new custom error record
+                                $SystemException = New-Object -TypeName "System.Management.Automation.RuntimeException" -ArgumentList ("{0}: {1}" -f $ResponseBody.error.code, $ResponseBody.error.message)
+                                $ErrorRecord = New-Object -TypeName "System.Management.Automation.ErrorRecord" -ArgumentList @($SystemException, $ErrorID, [System.Management.Automation.ErrorCategory]::NotImplemented, [string]::Empty)
 
-                            # Throw a terminating custom error record
-                            $PSCmdlet.ThrowTerminatingError($ErrorRecord)
+                                # Throw a terminating custom error record
+                                $PSCmdlet.ThrowTerminatingError($ErrorRecord)
+                            }
                         }
+
+                        # Set graph response as handled and stop processing loop
+                        $GraphResponseProcess = $false
                     }
+                    catch [System.Exception] {
+                        Write-Warning -Message "Unhandled error occurred in function. Error message: $($PSItem.Exception.Message)"
 
-                    # Set graph response as handled and stop processing loop
-                    $GraphResponseProcess = $false
+                        # Set graph response as handled and stop processing loop
+                        $GraphResponseProcess = $false
+                    }
                 }
             }
         }
