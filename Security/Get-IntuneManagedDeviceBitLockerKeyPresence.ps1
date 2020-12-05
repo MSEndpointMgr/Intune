@@ -175,7 +175,7 @@ Process {
                     $TokenExpireMins = ([datetime]$Headers["ExpiresOn"] - $UTCDateTime).Minutes
     
                     # Attempt to retrieve a refresh token when token expiration count is less than or equal to 0
-                    if ($TokenExpireMins -le 0) {
+                    if ($TokenExpireMins -le 10) {
                         Write-Verbose -Message "Existing token found but has expired, requesting a new token"
                         $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
                         $Headers = New-AuthenticationHeader -AccessToken $AccessToken
