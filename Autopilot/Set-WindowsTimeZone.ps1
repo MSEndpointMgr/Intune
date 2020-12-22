@@ -21,7 +21,7 @@
     1.0.0 - (2020-05-19) - Script created
     1.0.1 - (2020-05-23) - Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
     1.0.2 - (2020-09-10) - Improved registry key handling for enabling location services
-    1.0.3 - (2020-12-22) - Added support for TLS 1.2
+    1.0.3 - (2020-12-22) - Added support for TLS 1.2 to disable location services once script has completed
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -197,6 +197,17 @@ Process {
         }
     }
 
+    function Disable-LocationServices {
+        $LocationConsentKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location"
+        Set-RegistryValue -Path $LocationConsentKey -Name "Value" -Value "Deny" -Type "String"
+
+        $SensorPermissionStateKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}"
+        Set-RegistryValue -Path $SensorPermissionStateKey -Name "SensorPermissionState" -Value 0 -Type "DWord"
+
+        $LocationServiceConfigurationKey = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
+        Set-RegistryValue -Path $LocationServiceConfigurationKey -Name "Status" -Value 0 -Type "DWord"
+    }
+
     Write-LogEntry -Value "Starting to determine the desired Windows time zone configuration" -Severity 1
 
     try {
@@ -273,4 +284,8 @@ Process {
     catch [System.Exception] {
         Write-LogEntry -Value "Failed to load required 'System.Device' assembly, breaking operation" -Severity 3
     }
+}
+End {
+    # Set Location Services to disabled to let other policy configuration manage the state
+    Disable-LocationServices
 }
