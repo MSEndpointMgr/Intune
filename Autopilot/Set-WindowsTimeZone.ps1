@@ -15,12 +15,13 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-05-19
-    Updated:     2020-09-10
+    Updated:     2020-12-22
 
     Version history:
     1.0.0 - (2020-05-19) - Script created
     1.0.1 - (2020-05-23) - Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
     1.0.2 - (2020-09-10) - Improved registry key handling for enabling location services
+    1.0.3 - (2020-12-22) - Added support for TLS 1.2
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -28,6 +29,10 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$AzureMapsSharedKey = "<ENTER_YOUR_SHARED_KEY_HERE>"
 )
+Begin {
+    # Enable TLS 1.2 support for downloading modules from PSGallery
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+}
 Process {
     # Functions
     function Write-LogEntry {
