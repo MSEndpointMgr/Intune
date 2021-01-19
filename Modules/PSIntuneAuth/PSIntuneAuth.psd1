@@ -11,7 +11,7 @@
 RootModule = 'PSIntuneAuth.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.2.2'
+ModuleVersion = '1.2.3'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -100,7 +100,7 @@ PrivateData = @{
         # LicenseUri = ''
 
         # A URL to the main website for this project.
-        ProjectUri = 'https://github.com/SCConfigMgr/Intune/tree/master/Modules/PSIntuneAuth'
+        ProjectUri = 'https://github.com/MSEndpointMgr/Intune/tree/master/Modules/PSIntuneAuth'
 
         # A URL to an icon representing this module.
         # IconUri = ''

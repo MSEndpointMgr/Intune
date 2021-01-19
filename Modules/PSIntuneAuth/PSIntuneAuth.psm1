@@ -44,7 +44,7 @@ function Get-MSIntuneAuthToken {
         Author:      Nickolaj Andersen
         Contact:     @NickolajA
         Created:     2017-09-27
-        Updated:     2020-01-28
+        Updated:     2021-01-12
 
         Version history:
         1.0.0 - (2017-09-27) Function created
@@ -58,6 +58,7 @@ function Get-MSIntuneAuthToken {
                              to specify directly on the command line instead of being hard-coded. Now using the latest authority URI and installs the AzureAD module automatically.
         1.2.1 - (2020-01-15) Fixed an issue where when multiple versions of the AzureAD module installed would cause an error attempting in re-installing the Azure AD module
         1.2.2 - (2020-01-28) Added more verbose logging output for further troubleshooting in case an auth token is not aquired
+        1.2.3 - (2021-01-12) Added support for installing the AzureAD module along side with the AzureADPreview module
     #>
     [CmdletBinding()]
     param(
@@ -104,7 +105,7 @@ function Get-MSIntuneAuthToken {
         # Determine if the AzureAD module needs to be installed or updated to latest version
         try {
             Write-Verbose -Message "Attempting to locate AzureAD module on local system"
-            $AzureADModule = Get-Module -Name "AzureAD" -ListAvailable -ErrorAction Stop -Verbose:$false
+            $AzureADModule = Get-Module -Name "AzureAD" -ListAvailable -Verbose:$false
             if ($AzureADModule -ne $null) {
                 if (($AzureADModule | Measure-Object).Count -eq 1) {
                     $CurrentModuleVersion = Get-Module -Name "AzureAD" -ListAvailable -ErrorAction Stop -Verbose:$false | Select-Object -ExpandProperty Version
@@ -133,7 +134,23 @@ function Get-MSIntuneAuthToken {
                 $PackageProvider = Install-PackageProvider -Name NuGet -Force -Verbose:$false
 
                 # Install AzureAD module
-                Install-Module -Name "AzureAD" -Scope AllUsers -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+                $InstallArgs = @{
+                    "Name" = "AzureAD"
+                    "Scope" = "AllUsers"
+                    "Force" = $true
+                    "ErrorAction" = "Stop"
+                    "Confirm" = $false
+                    "Verbose" = $false
+                }
+
+                # Amend install args if AzureADPreview module is detected
+                $AzureADPreviewModule = Get-Module -Name "AzureADPreview" -ListAvailable -Verbose:$false
+                if ($AzureADPreviewModule -ne $null) {
+                    Write-Verbose -Message "Detected that the AzureADPreview module was installed, adding 'AllowClobber' parameter"
+                    $InstallArgs.Add("AllowClobber", $true)
+                }
+
+                Install-Module @InstallArgs
                 Write-Verbose -Message "Successfully installed AzureAD"
             }
             catch [System.Exception] {
