@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    Download the latest OneDriveSetup.exe and replace built-in version.
+    Download the latest OneDriveSetup.exe on the production ring, replace built-in version and initate per-machine OneDrive setup.
 
 .DESCRIPTION
-    This script will download the latest OneDriveSetup.exe and replace the built-in version executable, resulting in the latest version of OneDrive will always be installed per user.
+    This script will download the latest OneDriveSetup.exe from the production ring, replace the built-in executable, initiate the 
+    per-machine install which will result in the latest version of OneDrive will always be installed and synchronization can begin right away.
 
 .PARAMETER DownloadPath
     Specify a path for where OneDriveSetup.exe will be temporarily downloaded to.
@@ -139,6 +140,44 @@ Process {
         }
     }
 
+    function Invoke-Executable {
+        param (
+            [parameter(Mandatory = $true, HelpMessage = "Specify the file name or path of the executable to be invoked, including the extension.")]
+            [ValidateNotNullOrEmpty()]
+            [string]$FilePath,
+    
+            [parameter(Mandatory = $false, HelpMessage = "Specify arguments that will be passed to the executable.")]
+            [ValidateNotNull()]
+            [string]$Arguments
+        )
+        
+        # Construct a hash-table for default parameter splatting
+        $SplatArgs = @{
+            FilePath = $FilePath
+            NoNewWindow = $true
+            Passthru = $true
+            ErrorAction = "Stop"
+        }
+        
+        # Add ArgumentList param if present
+        if (-not ([System.String]::IsNullOrEmpty($Arguments))) {
+            $SplatArgs.Add("ArgumentList", $Arguments)
+        }
+        
+        # Invoke executable and wait for process to exit
+        try {
+            $Invocation = Start-Process @SplatArgs
+            $Handle = $Invocation.Handle
+            $Invocation.WaitForExit()   
+        }
+        catch [System.Exception] {
+            Write-Warning -Message $_.Exception.Message; break
+        }
+        
+        # Handle return value with exitcode from process
+        return $Invocation.ExitCode
+    }
+
     try {
         try {
             # Attempt to remove existing OneDriveSetup.exe in temporary location
@@ -223,6 +262,17 @@ Process {
                                                             }
     
                                                             Write-LogEntry -Value "Successfully updated built-in 'OneDriveSetup.exe' executable to the latest version" -Severity 1
+
+                                                            try {
+                                                                # Initiate updated built-in OneDriveSetup.exe and install as per-machine
+                                                                Write-LogEntry -Value "Initiate per-machine OneDrive setup installation, this process could take some time" -Severity 1
+                                                                Invoke-Executable -FilePath $OneDriveSetupFile -Arguments "/allusers /update" -ErrorAction Stop
+
+                                                                Write-LogEntry -Value "Successfully installed OneDrive as per-machine" -Severity 1
+                                                            }
+                                                            catch [System.Exception] {
+                                                                Write-LogEntry -Value "Failed to install OneDrive as per-machine. Error message: $($_.Exception.Message)" -Severity 3
+                                                            }
                                                         }
                                                         catch [System.Exception] {
                                                             Write-LogEntry -Value "Failed to remove '$($OneDriveSetupSourceFile)'. Error message: $($_.Exception.Message)" -Severity 3
