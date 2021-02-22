@@ -378,7 +378,7 @@ Process {
             Specify the Autopilot device identity id.
     
         .PARAMETER GroupTag
-            Specify the GroupTag string value.
+            Specify the Group Tag string value.
             
         .NOTES
             Author:      Nickolaj Andersen
@@ -394,7 +394,7 @@ Process {
             [ValidateNotNullOrEmpty()]
             [string]$Id,
     
-            [parameter(Mandatory = $true, HelpMessage = "Specify the GroupTag string value.")]
+            [parameter(Mandatory = $true, HelpMessage = "Specify the Group Tag string value.")]
             [ValidateNotNullOrEmpty()]
             [string]$GroupTag
         )
@@ -452,7 +452,7 @@ Process {
                         foreach ($AutopilotDevice in $AutopilotDevices) {
                             try {
                                 # Set group tag for current Autopilot device
-                                Write-Verbose -Message "Setting group tag value '$($Value)' for Autopilot device: $($AutopilotDevice.serialNumber)"
+                                Write-Verbose -Message "Setting Group Tag value '$($Value)' for Autopilot device: $($AutopilotDevice.serialNumber)"
                                 Set-AutopilotDevice -Id $AutopilotDevice.id -GroupTag $Value -ErrorAction Stop
 
                                 # Handle success output
