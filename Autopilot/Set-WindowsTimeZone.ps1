@@ -194,7 +194,10 @@ Process {
         if ($LocationService.Status -notlike "Running") {
             Write-LogEntry -Value "Location service is not running, attempting to start service" -Severity 1
             Start-Service -Name "lfsvc"
-        }
+        } elseif {
+	    Write-LogEntry -Value "Applying new configuration, attempting to restart service" -Severity 1
+            ReStart-Service -Name "lfsvc"
+	}
     }
 
     function Disable-LocationServices {
