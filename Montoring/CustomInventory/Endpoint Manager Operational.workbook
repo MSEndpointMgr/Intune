@@ -1,0 +1,262 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Microsoft Endpoint Manager Operational\r\n"
+      },
+      "name": "text - 3"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "9878ee10-a66a-4438-afdd-29789d76bd61",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 14400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 0"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "IntuneAuditLogs\r\n| summarize count() by OperationName, bin(TimeGenerated, 15m)",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "name": "query - 4"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "IntuneAuditLogs \r\n|summarize Auditevents = count() by OperationName | sort by Auditevents",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Data Type Distribution",
+              "timeContext": {
+                "durationMs": 0
+              },
+              "timeContextFromParameter": "TimeRange",
+              "showExportToExcel": true,
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "OperationName",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Auditevents",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 2,
+                "topContent": {
+                  "columnMatch": "OperationName",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Auditevents",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                },
+                "nodeIdField": "OperationName",
+                "graphOrientation": 3,
+                "showOrientationToggles": false,
+                "nodeSize": null,
+                "staticNodeSize": 100,
+                "colorSettings": null,
+                "hivesMargin": 5
+              },
+              "chartSettings": {
+                "createOtherGroup": 6
+              }
+            },
+            "customWidth": "40",
+            "showPin": true,
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let data = IntuneAuditLogs\r\n    | summarize TotalCount = count() by OperationName\r\n    | join kind=inner (IntuneAuditLogs\r\n    | make-series Trend = count() default = 0 on bin(TimeGenerated, 15m) in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain})  by OperationName\r\n        )\r\n        on OperationName\r\n    | order by TotalCount desc, OperationName asc\r\n    | project OperationName, TotalCount, Trend\r\n    | serialize Id = row_number();\r\nIntuneAuditLogs\r\n| summarize TotalCount = count() by OperationName, Identity\r\n| join kind=inner (IntuneAuditLogs\r\n    | make-series Trend = count() default = 0 on bin(TimeGenerated, 15m) in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain})  by OperationName, Identity\r\n    | project-away TimeGenerated)\r\n    on OperationName, Identity\r\n| order by TotalCount desc, OperationName asc\r\n| project OperationName, Identity, TotalCount, Trend\r\n| serialize Id = row_number(1000)\r\n| join kind=inner (data) on OperationName\r\n| project Id, Name = Identity, Type = 'Identitn', ['Operation Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (data \r\n    | project Id, Name = OperationName, Type = 'Operation', ['Operation Count'] = TotalCount, Trend)\r\n",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 0
+              },
+              "timeContextFromParameter": "TimeRange",
+              "exportFieldName": "Name",
+              "exportParameterName": "Resource",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Id",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation Count",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "Trend",
+                    "formatter": 9,
+                    "formatOptions": {
+                      "palette": "redGreen"
+                    }
+                  },
+                  {
+                    "columnMatch": "ParentId",
+                    "formatter": 5
+                  }
+                ],
+                "hierarchySettings": {
+                  "idColumn": "Id",
+                  "parentColumn": "ParentId",
+                  "treeType": 0,
+                  "expanderColumn": "Name"
+                }
+              },
+              "sortBy": []
+            },
+            "customWidth": "60",
+            "name": "query - 5"
+          }
+        ],
+        "exportParameters": true
+      },
+      "name": "group - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Resource_ = dynamic(\"{Resource}\");\r\nIntuneAuditLogs\r\n| where OperationName contains tostring(Resource_)\r\n| project TimeGenerated, OperationName, ResultType, ResultDescription, Identity, Properties",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Properties",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true
+              }
+            }
+          ]
+        }
+      },
+      "name": "query - 4"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/227b387f-e74b-4160-aa2e-a0d34eba2168/resourcegroups/rg_logs/providers/microsoft.operationalinsights/workspaces/mvp-loganalytics"
+  ],
+  "styleSettings": {
+    "spacingStyle": "none"
+  },
+  "fromTemplateId": "community-Workbooks/View Designer/Donut-List",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
