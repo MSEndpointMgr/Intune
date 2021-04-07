@@ -9,9 +9,6 @@
 .PARAMETER RunMode
     Select run mode for this script, either Stage or Execute.
 
-.PARAMETER HPIASoftpaqNumber
-    Specify the HP Image Assistant softpaq number.
-
 .PARAMETER HPIAAction
     Specify the HP Image Assistant action to perform, e.g. Download or Install.
 
@@ -23,12 +20,13 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-08-12
-    Updated:     2020-09-28
+    Updated:     2021-04-07
 
     Version history:
     1.0.0 - (2020-08-12) Script created
     1.0.1 - (2020-09-15) Added a fix for registering default PSGallery repository if not already registered
     1.0.2 - (2020-09-28) Added a new parameter HPIAAction that controls whether to Download or Install applicable drivers
+    1.0.3 - (2021-04-07) Replaced Get-Softpaq cmdlet with a hard-coded softpaq number with the newly added Install-HPImageAssistant cmdlet in the HPCMSL module
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -36,10 +34,6 @@ param(
     [ValidateNotNullOrEmpty()]
     [ValidateSet("Stage", "Execute")]
     [string]$RunMode,
-
-    [parameter(Mandatory = $false, HelpMessage = "Specify the HP Image Assistant softpaq number.")]
-    [ValidateNotNullOrEmpty()]
-    [string]$HPIASoftpaqNumber = "sp103654",
 
     [parameter(Mandatory = $false, HelpMessage = "Specify the HP Image Assistant action to perform, e.g. Download or Install.")]
     [ValidateNotNullOrEmpty()]
@@ -335,7 +329,7 @@ Process {
                     try {
                         # Download HP Image Assistant softpaq and extract it to Temp directory
                         Write-LogEntry -Value "Attempting to download and extract HP Image Assistant to: $($HPImageAssistantExtractPath)" -Severity 1
-                        Get-Softpaq -Number $HPIASoftpaqNumber -Extract -DestinationPath $HPImageAssistantExtractPath -Overwrite "yes" -Verbose -ErrorAction Stop
+                        Install-HPImageAssistant -Extract -DestinationPath $HPImageAssistantExtractPath -Quiet -ErrorAction Stop
     
                         try {
                             # Invoke HP Image Assistant to install drivers and driver software
