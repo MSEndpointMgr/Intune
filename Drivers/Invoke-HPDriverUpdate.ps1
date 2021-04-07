@@ -347,7 +347,7 @@ Process {
                                 "Install" {
                                     Write-LogEntry -Value "Attempting to execute HP Image Assistant to download and install drivers including driver software, this might take some time" -Severity 1
 
-                                    # Prepare arguments for HP Image Assistant download mode
+                                    # Prepare arguments for HP Image Assistant install mode
                                     $HPImageAssistantArguments = "/Operation:Analyze /Action:Install /Selection:All /Silent /Category:Drivers,Software /ReportFolder:$($HPImageAssistantReportPath) /SoftpaqDownloadFolder:$($SoftpaqDownloadPath)"
 
                                     # Set HP Image Assistant operational mode in registry
