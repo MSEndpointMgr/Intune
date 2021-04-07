@@ -9,9 +9,6 @@
 .PARAMETER RunMode
     Select run mode for this script, either Stage or Execute.
 
-.PARAMETER HPIASoftpaqNumber
-    Specify the HP Image Assistant softpaq number.
-
 .PARAMETER HPIAAction
     Specify the HP Image Assistant action to perform, e.g. Download or Install.
 
@@ -23,13 +20,13 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-08-12
-    Updated:     2020-09-28
+    Updated:     2021-04-06
 
     Version history:
     1.0.0 - (2020-08-12) Script created
     1.0.1 - (2020-09-15) Added a fix for registering default PSGallery repository if not already registered
     1.0.2 - (2020-09-28) Added a new parameter HPIAAction that controls whether to Download or Install applicable drivers
-    1.0.3 - (2021-04-06) Replaced HPIA Softpak with new Install-HPImageAssistant function
+    1.0.3 - (2021-04-06) Replaced HPIA Softpaq with new Install-HPImageAssistant function (Bruce Sa)
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -395,11 +392,6 @@ Process {
                             # Cleanup extracted HPIA directory
                             Write-LogEntry -Value "Attempting to cleanup extracted HP Image Assistant directory: $($HPImageAssistantExtractPath)" -Severity 1
                             Remove-Item -Path $HPImageAssistantExtractPath -Force -Recurse -Confirm:$false
-    
-                            # Cleanup downloaded HP Image Assistant softpaq
-                            $HPImageAssistantSoftpaqExecutable = Join-Path -Path $env:SystemRoot -ChildPath "Temp\$($HPIASoftpaqNumber).exe"
-                            Write-LogEntry -Value "Attempting to remove downloaded HP Image Assistant softpaq executable: $($HPImageAssistantSoftpaqExecutable)" -Severity 1
-                            Remove-Item -Path $HPImageAssistantSoftpaqExecutable -Force -Confirm:$false
 
                             # Remove script from Temp directory
                             Write-LogEntry -Value "Attempting to self-destruct executing script file: $($MyInvocation.MyCommand.Definition)" -Severity 1
