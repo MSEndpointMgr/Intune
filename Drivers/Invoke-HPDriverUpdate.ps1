@@ -393,11 +393,6 @@ Process {
                             Write-LogEntry -Value "Attempting to cleanup extracted HP Image Assistant directory: $($HPImageAssistantExtractPath)" -Severity 1
                             Remove-Item -Path $HPImageAssistantExtractPath -Force -Recurse -Confirm:$false
     
-                            # Cleanup downloaded HP Image Assistant softpaq
-                            $HPImageAssistantSoftpaqExecutable = Join-Path -Path $env:SystemRoot -ChildPath "Temp\$($HPIASoftpaqNumber).exe"
-                            Write-LogEntry -Value "Attempting to remove downloaded HP Image Assistant softpaq executable: $($HPImageAssistantSoftpaqExecutable)" -Severity 1
-                            Remove-Item -Path $HPImageAssistantSoftpaqExecutable -Force -Confirm:$false
-
                             # Remove script from Temp directory
                             Write-LogEntry -Value "Attempting to self-destruct executing script file: $($MyInvocation.MyCommand.Definition)" -Severity 1
                             Remove-Item -Path $MyInvocation.MyCommand.Definition -Force -Confirm:$false
