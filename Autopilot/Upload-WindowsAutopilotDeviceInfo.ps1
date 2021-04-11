@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.1.1
+.VERSION 1.1.2
 .GUID 8d3532b3-ff9f-4031-b06f-25fcab76c626
 .AUTHOR NickolajA
 .DESCRIPTION Gather device hash from local machine and automatically upload it to Autopilot
@@ -51,12 +51,13 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-03-21
-    Updated:     2019-10-29
+    Updated:     2021-03-24
     
     Version history:
     1.0.0 - (2019-03-21) Script created.
     1.1.0 - (2019-10-29) Added support for specifying the primary user assigned to the uploaded Autopilot device as well as renaming the OrderIdentifier parameter to GroupTag. Thanks to @Stgrdk for his contributions. Switched from Get-CimSession to Get-WmiObject to get device details from WMI.
-    1.1.1 - (2021-03-24) Script now uses the GroupTag property instead of the depcreated OrderIdentifier property. Also removed the code section that attempted to perform an Autopilot sync operation
+    1.1.1 - (2021-03-24) Script now uses the groupTag property instead of the depcreated OrderIdentifier property. Also removed the code section that attempted to perform an Autopilot sync operation
+    1.1.2 - (2021-03-24) Corrected a spelling mistake of 'GroupTag' to 'groupTag'
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
@@ -187,7 +188,7 @@ Process {
     Write-Verbose -Message "Constructing required JSON body based upon parameter input data for device hash upload"
     $AutopilotDeviceIdentity = [ordered]@{
         '@odata.type' = '#microsoft.graph.importedWindowsAutopilotDeviceIdentity'
-        'GroupTag' = if ($GroupTag) { "$($GroupTag)" } else { "" }
+        'groupTag' = if ($GroupTag) { "$($GroupTag)" } else { "" }
         'serialNumber' = "$($SerialNumber)"
         'productKey' = if ($ProductKey) { "$($ProductKey)" } else { "" }
         'hardwareIdentifier' = "$($DeviceHashData)"
