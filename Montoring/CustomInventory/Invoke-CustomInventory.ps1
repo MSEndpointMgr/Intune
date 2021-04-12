@@ -31,12 +31,14 @@ $CustomerId = ""
 # Replace with your Primary Key
 $SharedKey = ""
 
-# You can use an optional field to specify the timestamp from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time
-$TimeStampField = ""
-
 #Control if you want to collect App or Device Inventory or both (True = Collect)
 $CollectAppInventory = $true
 $CollectDeviceInventory = $true
+
+# You can use an optional field to specify the timestamp from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time
+# DO NOT DELETE THIS VARIABLE. Recommened keep this blank. 
+$TimeStampField = ""
+
 #endregion initialize
 
 #region functions
@@ -280,7 +282,7 @@ if ($CollectDeviceInventory) {
     $Inventory | Add-Member -MemberType NoteProperty -Name "BitlockerCipher" -Value "$ComputerBitlockerCipher" -Force
     $Inventory | Add-Member -MemberType NoteProperty -Name "BitlockerVolumeStatus" -Value "$ComputerBitlockerStatus" -Force
     $Inventory | Add-Member -MemberType NoteProperty -Name "BitlockerProtectionStatus" -Value "$ComputerBitlockerProtection" -Force 
-    $Inventory | Add-Member -MemberType NoteProperty -Name "ComputerContry" -Value "$ComputerCountry" -Force 
+    $Inventory | Add-Member -MemberType NoteProperty -Name "ComputerCountry" -Value "$ComputerCountry" -Force 
     $Inventory | Add-Member -MemberType NoteProperty -Name "ComputerCity" -Value "$ComputerCity" -Force  
     $Inventory | Add-Member -MemberType NoteProperty -Name "NetworkAdapters" -Value $NetWorkArrayList -Force
 
