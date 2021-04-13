@@ -240,7 +240,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "DeviceInventory_CL\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| where isnotempty(ComputerContry_s) \r\n| summarize arg_max (TimeGenerated, * ) by SerialNumber_s\r\n| project ComputerContry_s, ComputerCity_s\r\n| summarize count() by ComputerContry_s, ComputerCity_s",
+        "query": "DeviceInventory_CL\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| where isnotempty(ComputerCountry_s) \r\n| summarize arg_max (TimeGenerated, * ) by SerialNumber_s\r\n| project ComputerCountry_s, ComputerCity_s\r\n| summarize count() by ComputerCountry_s, ComputerCity_s",
         "size": 0,
         "timeContext": {
           "durationMs": 2592000000
@@ -251,7 +251,7 @@
         "visualization": "map",
         "mapSettings": {
           "locInfo": "CountryRegion",
-          "locInfoColumn": "ComputerContry_s",
+          "locInfoColumn": "ComputerCountry_s",
           "sizeSettings": "count_",
           "sizeAggregation": "Count",
           "legendMetric": "count_",
