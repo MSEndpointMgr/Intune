@@ -1,0 +1,504 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Application Inventory\r\n---\r\n"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "69110cf3-b63e-4a2a-acff-b4153066e98f",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 172800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "8a108a50-e90e-4f47-91cd-fdc3c3b4108f",
+            "version": "KqlParameterItem/1.0",
+            "name": "Applications",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "let AppInventory = AppInventory_CL;\r\nAppInventory\r\n| where AppName_s <> \"\"\r\n| distinct AppName_s\r\n| sort by AppName_s asc",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::1",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 0"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppInventory_CL\r\n    | where AppName_s in ({Applications}) or '*' in ({Applications})\r\n    | summarize arg_max(TimeGenerated, *) by ManagedDeviceID_g, AppName_s \r\n    | summarize TotalCount = count() by AppName_s \r\n    | join kind=inner (AppInventory_CL\r\n    | make-series Trend = count() default = 0 on bin(TimeGenerated, 1d) in range(ago(2d), now(), 1h)  by AppName_s\r\n    )\r\n    on AppName_s\r\n    | order by TotalCount desc, AppName_s asc\r\n    | serialize Id = row_number()\r\n    | project Id, AppName = AppName_s, TotalCount, Trend",
+        "size": 2,
+        "timeContext": {
+          "durationMs": 172800000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "AppName",
+        "exportParameterName": "AppName_s",
+        "exportDefaultValue": "(none)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Application Count",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "sortBy": [
+            {
+              "itemKey": "AppName",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "AppName",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppInventory_CL\r\n| where AppName_s == \"{AppName_s}\" \r\n| summarize arg_max(TimeGenerated, *) by ManagedDeviceID_g, AppName_s\r\n| project ComputerName_s, AppName_s, AppVersion_s, TimeGenerated\r\n| summarize count () by AppVersion_s",
+        "size": 1,
+        "title": "{AppName_s} version counts",
+        "timeContext": {
+          "durationMs": 172800000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "AppVersion_s",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "count_",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "AppName_s",
+        "comparison": "isNotEqualTo",
+        "value": "(none)"
+      },
+      "customWidth": "50",
+      "name": "query - AppVersion counts"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppInventory_CL\r\n| where AppName_s == \"{AppName_s}\" \r\n| summarize arg_max(TimeGenerated, *) by ManagedDeviceID_g, AppName_s\r\n| project TimeGenerated, ComputerName_s, AppName_s, AppVersion_s",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "{AppName_s} installed device list",
+        "timeContext": {
+          "durationMs": 172800000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "query - 12"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "\r\n\r\n-------------------\r\n\r\n# Device Specific App Inventory\r\n\r\n-----------------"
+      },
+      "name": "text - 10",
+      "styleSettings": {
+        "margin": "0px",
+        "padding": "0px"
+      }
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "ad1dcea9-03e0-4fcb-a27f-0f7af0a17da2",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange2",
+            "label": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "ed3d2d0d-1465-4d2a-9020-4384800d1bc1",
+            "version": "KqlParameterItem/1.0",
+            "name": "Device",
+            "type": 2,
+            "isRequired": true,
+            "query": "DeviceInventory_CL\r\n| summarize arg_max(TimeGenerated, *) by ManagedDeviceID_g\r\n| project ComputerName_s\r\n",
+            "value": "MVP24-007",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 7776000000
+            },
+            "timeContextFromParameter": "TimeRange2",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 6",
+      "styleSettings": {
+        "margin": "0px"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let DeviceInventory = DeviceInventory_CL;\r\nlet AppInventory = AppInventory_CL;\r\nAppInventory \r\n| join kind = inner DeviceInventory on ManagedDeviceID_g\r\n| where ComputerName_s == \"{Device}\"\r\n| summarize arg_max(TimeGenerated, *) by AppName_s\r\n| summarize AppCount = count (AppName_s)\r\n| extend TitleText = \"Application Installed\"\r\n",
+        "size": 1,
+        "timeContext": {
+          "durationMs": 1209600000
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "TitleText",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "AppCount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "20",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let DeviceInventory = DeviceInventory_CL;\r\nlet AppInventory = AppInventory_CL;\r\nAppInventory \r\n| join kind = inner DeviceInventory on ManagedDeviceID_g\r\n| where ComputerName_s == \"{Device}\"\r\n| summarize arg_max(TimeGenerated, *) by AppName_s\r\n| project ComputerName_s, AppName_s, AppVersion_s, AppUninstallString_s\r\n| sort by AppName_s asc \r\n",
+        "size": 1,
+        "timeContext": {
+          "durationMs": 1209600000
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "AppName_s",
+              "formatter": 0,
+              "formatOptions": {
+                "customColumnWidthSetting": "60ch"
+              }
+            },
+            {
+              "columnMatch": "max_TimeGenerated_AppVersion_s",
+              "formatter": 0,
+              "formatOptions": {
+                "customColumnWidthSetting": "22.7143ch"
+              }
+            },
+            {
+              "columnMatch": "max_TimeGenerated_AppUninstallString_s",
+              "formatter": 0,
+              "formatOptions": {
+                "customColumnWidthSetting": "117.4286ch"
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "AppName_s",
+              "label": "Application"
+            }
+          ]
+        }
+      },
+      "customWidth": "80",
+      "name": "query - 5"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "----\r\n# M365 Apps for Enterprise\r\n----"
+      },
+      "name": "text - 8"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f39d688a-9617-42f7-9db1-317f44f1f3fc",
+            "version": "KqlParameterItem/1.0",
+            "name": "M365TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 14"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let AppInventory = AppInventory_CL;\r\nAppInventory \r\n| where AppName_s contains \"Microsoft 365 Apps for enterprise\"\r\n| summarize arg_max(TimeGenerated, *) by ManagedDeviceID_g\r\n| summarize count () by AppVersion_s",
+        "size": 1,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "M365TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "query - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let startTime = {M365TimeRange:start};\r\nlet endTime = {M365TimeRange:end};\r\nAppInventory_CL\r\n| where AppName_s contains \"Microsoft 365 Apps for enterprise\"\r\n| summarize arg_max(TimeGenerated, *) by AppVersion_s\r\n| make-series num=dcount(ManagedDeviceID_g) default=0 on TimeGenerated in range(startTime, endTime, 1d) by AppVersion_s\r\n| render timechart ",
+        "size": 1,
+        "aggregation": 5,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "M365TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart",
+        "chartSettings": {
+          "showLegend": true
+        }
+      },
+      "name": "query - 15"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/227b387f-e74b-4160-aa2e-a0d34eba2168/resourcegroups/rg_logs/providers/microsoft.operationalinsights/workspaces/mvp-loganalytics"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

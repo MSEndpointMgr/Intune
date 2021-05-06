@@ -1,0 +1,274 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Device Inventory\r\n---\r\n"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "ad1dcea9-03e0-4fcb-a27f-0f7af0a17da2",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange2",
+            "label": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "60003c98-2170-459c-9158-26ae9af286bf",
+            "version": "KqlParameterItem/1.0",
+            "name": "DeviceName",
+            "type": 1,
+            "description": "Default \"All Devices\"",
+            "value": "",
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange2"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 6",
+      "styleSettings": {
+        "margin": "0px"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DeviceInventory_CL\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| where isnotempty(SerialNumber_s) \r\n| extend BitlockerCipher_s = iff(isempty(BitlockerCipher_s), \"NoBitlocker\", BitlockerCipher_s)\r\n| project TimeGenerated, SerialNumber_s, BitlockerCipher_s, ComputerName_s\r\n| summarize arg_max (TimeGenerated, *) by SerialNumber_s\r\n//| evaluate pivot (BitlockerCipher_s)\r\n| summarize dcount(SerialNumber_s) by BitlockerCipher_s",
+        "size": 1,
+        "title": "Bitlocker Status",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "tileSettings": {
+          "showBorder": false
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "XtsAes128",
+              "color": "blue"
+            },
+            {
+              "seriesName": "NoBitlocker",
+              "color": "redBright"
+            },
+            {
+              "seriesName": "XtsAes256",
+              "color": "green"
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DeviceInventory_CL\r\n| where isnotempty(Model_s)\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| summarize arg_max (TimeGenerated, *) by SerialNumber_s\r\n| summarize dcount(SerialNumber_s) by DefaultAUService_s",
+        "size": 1,
+        "title": "Windows Update Service",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "tileSettings": {
+          "showBorder": false
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "XtsAes128",
+              "color": "blue"
+            },
+            {
+              "seriesName": "NoBitlocker",
+              "color": "redBright"
+            },
+            {
+              "seriesName": "XtsAes256",
+              "color": "green"
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "IntuneDevices\r\n| where isnotempty(StorageTotal) and StorageTotal != 0 and OS == \"Windows\"\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  DeviceName contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| summarize arg_max (LastContact, *) by SerialNumber\r\n| extend StorageFreeRate = (StorageFree * 100 / StorageTotal) \r\n| extend StorageTotal = strcat (StorageTotal / 1024, \" GB\")\r\n| extend StorageFree = strcat (StorageFree / 1024, \" GB\")  \r\n| project TimeGenerated, DeviceName, StorageTotal, StorageFree, StorageFreeRate",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Storage Status",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "StorageFreeRate",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 20,
+                "max": 50,
+                "palette": "redGreen"
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "DeviceName",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "DeviceName",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data_DeviceInventory = DeviceInventory_CL\r\n    | where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\";\r\nlet data_IntuneDevice = IntuneDevices\r\n    | where \"{DeviceName:escape}\" =~ \"*\" or  DeviceName contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\";\r\ndata_DeviceInventory\r\n| join kind=innerunique IntuneDevices on $left.ManagedDeviceID_g == $right.DeviceId\r\n| summarize arg_max (LastContact, *) by SerialNumber\r\n| project TimeGenerated, ComputerName_s, UPN, UserName, CompliantState, Ownership, ManagedBy, JoinType, ManagedDeviceID_g, AADDeviceID = ReferenceId, Model_s, Manufacturer_s, ComputerUpTime_s, LastBoot_s, InstallDate_s, WindowsVersion_s, SkuFamily, DefaultAUService_s, SerialNumber_s, BiosVersion_s, BiosDate_s, FirmwareType_s, Memory_s, OSBuild_s, OSRevision_s, CPUManufacturer_s, CPUName_s, CPUCores_s, CPULogical_s, TPMReady_s, TPMPresent_s, TPMEnabled_s, TPMActived_s, BitlockerCipher_s, BitlockerVolumeStatus_s, BitlockerProtectionStatus_s, NetInterfaceDescription_s, NetProfileName_s, NetIPv4Adress_s, NetInterfaceAlias_s, NetIPv4DefaultGateway_s, StorageTotal, StorageFree",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Device Inventory Summarize",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "ComputerName_s",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "ComputerName_s",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DeviceInventory_CL\r\n| where \"{DeviceName:escape}\" =~ \"*\" or  ComputerName_s contains \"{DeviceName:escape}\" or \"{DeviceName:escape}\" =~ \"All devices\"\r\n| where isnotempty(ComputerCountry_s) \r\n| summarize arg_max (TimeGenerated, * ) by SerialNumber_s\r\n| project ComputerCountry_s, ComputerCity_s\r\n| summarize count() by ComputerCountry_s, ComputerCity_s",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange2",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "ComputerCountry_s",
+          "sizeSettings": "count_",
+          "sizeAggregation": "Count",
+          "legendMetric": "count_",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "count_",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "name": "query - 6"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/227b387f-e74b-4160-aa2e-a0d34eba2168/resourcegroups/rg_logs/providers/microsoft.operationalinsights/workspaces/mvp-loganalytics"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
