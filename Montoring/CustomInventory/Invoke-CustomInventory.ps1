@@ -204,10 +204,10 @@ if ($CollectDeviceInventory) {
     $ComputerOSBuild = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name CurrentBuild).CurrentBuild
     $ComputerOSRevision = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name UBR).UBR
     $ComputerCPU = Get-CimInstance win32_processor  | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors
-    $ComputerProcessorManufacturer = $ComputerCPU.Manufacturer
-    $ComputerProcessorName = $ComputerCPU.Name
-    $ComputerNumberOfCores = $ComputerCPU.NumberOfCores
-    $ComputerNumberOfLogicalProcessors = $ComputerCPU.NumberOfLogicalProcessors
+    $ComputerProcessorManufacturer = $ComputerCPU.Manufacturer | Get-Unique
+    $ComputerProcessorName = $ComputerCPU.Name | Get-Unique
+    $ComputerNumberOfCores = $ComputerCPU.NumberOfCores | Get-Unique
+    $ComputerNumberOfLogicalProcessors = $ComputerCPU.NumberOfLogicalProcessors | Get-Unique
     $TPMValues = Get-Tpm -ErrorAction SilentlyContinue | Select-Object -Property TPMReady, TPMPresent, TPMEnabled, TPMActivated, ManagedAuthLevel
     $BitLockerInfo = Get-BitLockerVolume -MountPoint C: | Select-Object -Property *
     $ComputerTPMReady = $TPMValues.TPMReady
@@ -316,7 +316,7 @@ if ($CollectAppInventory) {
         $tempapp | Add-Member -MemberType NoteProperty -Name "ManagedDeviceID" -Value "$ManagedDeviceID" -Force 
         $tempapp | Add-Member -MemberType NoteProperty -Name "AppName" -Value $App.DisplayName -Force
         $tempapp | Add-Member -MemberType NoteProperty -Name "AppVersion" -Value $App.DisplayVersion -Force
-        $tempapp | Add-Member -MemberType NoteProperty -Name "AppPublisher" -Value $App.InstallDate -Force -ErrorAction SilentlyContinue
+        $tempapp | Add-Member -MemberType NoteProperty -Name "AppInstallDate" -Value $App.InstallDate -Force -ErrorAction SilentlyContinue
         $tempapp | Add-Member -MemberType NoteProperty -Name "AppPublisher" -Value $App.Publisher -Force
         $tempapp | Add-Member -MemberType NoteProperty -Name "AppUninstallString" -Value $App.UninstallString -Force
         $tempapp | Add-Member -MemberType NoteProperty -Name "AppUninstallRegPath" -Value $app.PSPath.Split("::")[-1]
