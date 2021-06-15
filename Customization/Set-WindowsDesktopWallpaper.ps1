@@ -63,8 +63,8 @@ Begin {
     }
 
     # Determine the localized name of the principals required for the functionality of this script
-    $LocalAdministratorsPrincipal = "BUILTIN\Administrators"
-    $LocalUsersPrincipal = "BUILTIN\Users"
+    $LocalAdministratorsPrincipal = ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-544').Translate( [System.Security.Principal.NTAccount]).Value
+    $LocalUsersPrincipal = ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-545').Translate( [System.Security.Principal.NTAccount]).Value
     $LocalSystemPrincipal = "NT AUTHORITY\SYSTEM"
     $TrustedInstallerPrincipal = "NT SERVICE\TrustedInstaller"
     $RestrictedApplicationPackagesPrincipal = "ALL RESTRICTED APPLICATION PACKAGES"
