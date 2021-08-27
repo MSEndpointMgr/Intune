@@ -44,7 +44,7 @@ function Get-MSIntuneAuthToken {
         Author:      Nickolaj Andersen
         Contact:     @NickolajA
         Created:     2017-09-27
-        Updated:     2021-01-12
+        Updated:     2021-08-27
 
         Version history:
         1.0.0 - (2017-09-27) Function created
@@ -59,6 +59,7 @@ function Get-MSIntuneAuthToken {
         1.2.1 - (2020-01-15) Fixed an issue where when multiple versions of the AzureAD module installed would cause an error attempting in re-installing the Azure AD module
         1.2.2 - (2020-01-28) Added more verbose logging output for further troubleshooting in case an auth token is not aquired
         1.2.3 - (2021-01-12) Added support for installing the AzureAD module along side with the AzureADPreview module
+        1.2.4 - (2021-08-27) Removed breaks on warnings and return of $null, issue #32
     #>
     [CmdletBinding()]
     param(
@@ -241,27 +242,33 @@ function Get-MSIntuneAuthToken {
                                 return $Authentication                    
                             }
                             else {
-                                Write-Warning -Message "Failure to acquire access token. Response with access token was null"; 
+                                Write-Warning -Message "Failure to acquire access token. Response with access token was null" 
+                                return $null
                             }
                         }
                         catch [System.Exception] {
                             Write-Warning -Message "An error occurred when attempting to call AcquireTokenAsync method. Error message: $($_.Exception.Message)"; 
+                            return $null
                         }
                     }
                     catch [System.Exception] {
                         Write-Warning -Message "An error occurred when constructing an authentication token. Error message: $($_.Exception.Message)"; 
+                        return $null
                     }
                 }
                 catch [System.Exception] {
                     Write-Warning -Message "Unable to load required assemblies from AzureAD module to construct an authentication token. Error message: $($_.Exception.Message)"; 
+                    return $null
                 }
             }
             else {
                 Write-Warning -Message "Azure AD PowerShell module is not present on this system, please install before you continue"; 
+                return $null
             }
         }
         catch [System.Exception] {
             Write-Warning -Message "Unable to load required AzureAD module to for retrieving an authentication token. Error message: $($_.Exception.Message)"; 
+            return $null
         }
     }
 }
