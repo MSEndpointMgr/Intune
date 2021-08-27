@@ -241,27 +241,27 @@ function Get-MSIntuneAuthToken {
                                 return $Authentication                    
                             }
                             else {
-                                Write-Warning -Message "Failure to acquire access token. Response with access token was null"; break
+                                Write-Warning -Message "Failure to acquire access token. Response with access token was null"; 
                             }
                         }
                         catch [System.Exception] {
-                            Write-Warning -Message "An error occurred when attempting to call AcquireTokenAsync method. Error message: $($_.Exception.Message)"; break
+                            Write-Warning -Message "An error occurred when attempting to call AcquireTokenAsync method. Error message: $($_.Exception.Message)"; 
                         }
                     }
                     catch [System.Exception] {
-                        Write-Warning -Message "An error occurred when constructing an authentication token. Error message: $($_.Exception.Message)"; break
+                        Write-Warning -Message "An error occurred when constructing an authentication token. Error message: $($_.Exception.Message)"; 
                     }
                 }
                 catch [System.Exception] {
-                    Write-Warning -Message "Unable to load required assemblies from AzureAD module to construct an authentication token. Error message: $($_.Exception.Message)"; break
+                    Write-Warning -Message "Unable to load required assemblies from AzureAD module to construct an authentication token. Error message: $($_.Exception.Message)"; 
                 }
             }
             else {
-                Write-Warning -Message "Azure AD PowerShell module is not present on this system, please install before you continue"; break
+                Write-Warning -Message "Azure AD PowerShell module is not present on this system, please install before you continue"; 
             }
         }
         catch [System.Exception] {
-            Write-Warning -Message "Unable to load required AzureAD module to for retrieving an authentication token. Error message: $($_.Exception.Message)"; break
+            Write-Warning -Message "Unable to load required AzureAD module to for retrieving an authentication token. Error message: $($_.Exception.Message)"; 
         }
     }
 }
