@@ -99,20 +99,6 @@ Begin {
         Write-Warning -Message "An error occurred while attempting to locate required Server Authentication certificate matching external NDES FQDN"; break
     }
 
-    # Get Client Authentication certifcate for Intune Certificate Connector
-    try {
-        $ClientAuthenticationCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" -ErrorAction Stop | Where-Object { ($_.Subject -match $ServerFQDN) -and ($_.Extensions["2.5.29.37"].EnhancedKeyUsages.FriendlyName.Contains("Client Authentication")) }
-        if ($ClientAuthenticationCertificate -eq $null) {
-            Write-Warning -Message "Unable to locate required Client Authentication certificate matching internal NDES server FQDN"; break
-        }
-        else {
-            Write-Verbose -Message "- Successfully located required Client Authentication certificate matching internal NDES server FQDN"
-        }
-    }
-    catch [System.Exception] {
-        Write-Warning -Message "An error occurred while attempting to locate required Client Authentication certificate matching internal NDES server FQDN"; break
-    }
-
     # Completed verbose logging for environment gathering process phase
     Write-Verbose -Message "Completed environment gathering process phase"
 }
