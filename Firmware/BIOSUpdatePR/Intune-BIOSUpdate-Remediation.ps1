@@ -458,10 +458,18 @@ switch -Wildcard ($Manufacturer) {
             if (-not ([string]::IsNullOrEmpty($SupportedModel))) {
                 [version]$BIOSApprovedVersion = ($BIOSPackageDetails | Where-Object {$_.Description -match $SystemID} | Sort-Object Version -Descending  | Select-Object -First 1 -Unique -ExpandProperty Version).Split(" ")[0] 
                 $OEM = "HP"
+                Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "$($SupportedModel.Description) succesfully matched on SKU $($SystemID)"
             } 
             else {
-                Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message  "Model $ComputerModel with SKU value $SystemSKU not found in XML source"
+                Write-EventLog -LogName $EventLogName -EntryType Warning -EventId 8002 -Source $EventLogSource -Message "Model with SKU value $($SystemID) not found in XML source. Exiting script"
+                Write-Output "Model with SKU value $($SystemID) not found in XML source. Exiting script"
+                Exit 0
             }       
+        } else { 
+            # HP Prereq is missing. Exit script
+            Write-EventLog -LogName $EventLogName -EntryType Warning -EventId 8002 -Source $EventLogSource -Message "HP CMSL Powershell Module is missing. Remediation not possible."
+            Write-Output "HP Prereq missing. HPCMSL Powershell Module is missing. Remediation not possible."
+            Exit 0
         }
     }
     {($PSItem -match "Lenovo")}{
@@ -476,7 +484,7 @@ switch -Wildcard ($Manufacturer) {
                 $OEM = "Lenovo"
             } 
             else {
-                Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Model $ComputerModel with SKU value $SystemSKU not found in XML source"
+                Write-EventLog -LogName $EventLogName -EntryType Warning -EventId 8001 -Source $EventLogSource -Message "Model $ComputerModel with SKU value $SystemSKU not found in XML source"
             }
         }
     }
