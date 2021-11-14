@@ -1,20 +1,23 @@
 <#
 .SYNOPSIS
-    BIOS upgrade check script for MSEndpointMgr Intune MBM
+    BIOS Control detection script for MSEndpointMgr Intune MBM
 .DESCRIPTION
-    New stuff
+    This proactive remediation script is part of the Intune version of Modern BIOS management. More information can be found at https://msendpointmgr.com 
+    NB: Only edit variables in the Declarations region of the script. 
+    The following variables MUST be set: 
+    1. DATUri - Url path to BIOSPackages.xml 
 .EXAMPLE
-	Invoke-IntuneBIOSUpdateDetect.ps1
+	Invoke-IntuneBIOSUpdateDetect.ps1 - Run as SYSTEM 
 .NOTES
 	Version:    1.0
     Author:     Maurice Daly / Jan Ketil Skanke @ Cloudway
     Contact:    @JankeSkanke @Modaly_IT
     Creation Date:  01.10.2021
     Purpose/Change: Initial script development
-    Created:     2020-10-11
-    Updated:     |
+    Created:     2021-14-11
+    Updated:     
     Version history:
-    1.0.0 - (2021.01.10) Script created
+    1.0.0 - (2021.14.11) Script created
 #>
 #Region Initialisations
 # Set Error Action to Silently Continue
@@ -25,21 +28,21 @@ $Script:ExitCode = 0
 #Endregion Initialisations
 
 #Region Decalarations
-# Create and define Eventlog for logging
+# Create and define Eventlog for logging - edit with caution
 $Script:EventLogName = 'MSEndpointMgr'
 $Script:EventLogSource = 'MSEndpointMgrBIOSMgmt'
 New-EventLog -LogName $EventLogName -Source $EventLogSource -ErrorAction SilentlyContinue
 
 # Define path to DAT provisioned XML
-$Script:DATUri = "https://azurefilesnorway.blob.core.windows.net/dat/BIOSPackages.xml"
+$Script:DATUri = "<TO BE SET>"
 
 # Get manufacturer 
 $Script:Manufacturer = (Get-WmiObject -Class "Win32_ComputerSystem" | Select-Object -ExpandProperty Manufacturer).Trim()
 
-# Registry path for status messages
+# Registry path for status messages - Edit with caution 
 $Script:RegPath = 'HKLM:\SOFTWARE\MSEndpointMgr\BIOSUpdateManagemement'
 
-# Defining BIOSUpdate Status Variables
+# Defining BIOSUpdate Status Variables - Do not edit
 $Script:BIOSUpdateInprogress = $null
 $Script:BIOSUpdateAttempts = $null
 $Script:BIOSUpdateTime = $null
@@ -233,9 +236,9 @@ if ($BiosUpdateinProgress -ne 0){
         if ($BIOSCheck.ExitCode -eq 0){
             Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Update Complete - Clean up in registry"
             Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateInprogress' -Value 0
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateAttempts' -Value 0 -PropertyType 'DWORD'
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateTime' -Value "" -PropertyType 'String'
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value "" -PropertyType 'String'
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateAttempts' -Value 0 
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateTime' -Value "" 
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value "" 
             Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "$($BIOSCheck.Message)"
             Write-Output "$($BIOSCheck.Message)"
             Exit 0

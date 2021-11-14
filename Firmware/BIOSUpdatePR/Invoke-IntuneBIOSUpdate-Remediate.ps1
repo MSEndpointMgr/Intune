@@ -1,43 +1,55 @@
 <#
 .SYNOPSIS
-    BIOS upgrade remediation script for MSEndpointMgr Intune MBM
+    BIOS Control remediation script for MSEndpointMgr Intune MBM
 .DESCRIPTION
-    1. Check for active update in progress
-    2. Check if computer has rebooted since update started
-    3. If computer not restarted, toast users to reboot - Exit 0 with output 
-    4. If computer restarted, check BIOS version 
-    5. If not = Latest : Silently wait 3 times - Exit 1 with output 
-    6. If no update in progress check latest and if pending update invoke bios update and toast EXIT 0 with output 
-    7. If no update in progress and BIOS is current - EXIT 0 with output 
+    This proactive remediation script is part of the Intune version of Modern BIOS management. More information can be found at https://msendpointmgr.com 
+    NB: Only edit variables in the Declarations region of the script. 
+    The following variables MUST be set: 
+    1. DATUri - Url path to BIOSPackages.xml 
+    2. LogoImageUri - Url to logo image for toast notification 
+    3. HeroImageUri - Url to hero image for toast notification 
+
+    If you have a common BIOS password on all devices, that can be added to this script for support (HP), but be aware that both local admin users on the devices and Intune admins will 
+    be able to retrive this password if you do so. 
+
 .EXAMPLE
-	IntuneBIOSUpdate-Remediation.ps1
+	Invoke-IntuneBIOSUpdateRemediate.ps1 - Run as SYSTEM 
 .NOTES
-	Maurice Daly / Jan Ketil Skanke @ Cloudway
+	Version:    1.0
+    Author:     Maurice Daly / Jan Ketil Skanke @ Cloudway
+    Contact:    @JankeSkanke @Modaly_IT
+    Creation Date:  01.10.2021
+    Purpose/Change: Initial script development
+    Created:     2021-14-11
+    Updated:     
+    Version history:
+    1.0.0 - (2021.14.11) Script created
 #>
 
-#Region Initialisations
+#region Initialisations
 # Set Error Action to Silently Continue
 $Script:ErrorActionPreference = "SilentlyContinue"
 # Enable TLS 1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Script:ExitCode = 0
-#Endregion Initialisations
-#Region Decalarations 
-# Create and define Eventlog for logging
+#endregion Initialisations
+#region Decalarations 
+# Create and define Eventlog for logging - edit with caution 
 $Script:EventLogName = 'MSEndpointMgr'
 $Script:EventLogSource = 'MSEndpointMgrBIOSMgmt'
 New-EventLog -LogName $EventLogName -Source $EventLogSource -ErrorAction SilentlyContinue
-# Set Toast Notification App Parameters
+# Set Toast Notification App Parameters - do not edit 
 $Script:AppID = "MSEndpointMgr.SystemToast.UpdateNotification"
 $Script:AppDisplayName = "MSEndpointMgr"
 $Script:IconUri = "%SystemRoot%\system32\@WindowsUpdateToastIcon.png"
+$Script:ToastMediafolder = "$env:programdata\MSEndpointMgr\ToastNotification"
 
-#Set Toast Settings - Adjust to your own requirements
+#Set Toast Settings - Adjust to your own requirements - modification required
 $Script:ToastSettings = @{
-    LogoImageUri = "https://azurefilesnorway.blob.core.windows.net/brandingpictures/Notifications/warning_icon.png"
-    HeroImageUri = "https://azurefilesnorway.blob.core.windows.net/brandingpictures/Notifications/firmware-update.jpg"
-    LogoImage = "$env:TEMP\ToastLogoImage.png"
-    HeroImage = "$env:TEMP\ToastHeroImage.png"
+    LogoImageUri = "<TO BE SET>"
+    HeroImageUri = "<TO BE SET>"
+    LogoImage = "$ToastMediafolder\ToastLogoImage.png"
+    HeroImage = "$ToastMediafolder\ToastHeroImage.png"
     AttributionText = "Bios Update Notification"
     HeaderText = "It is time to update your BIOS!"
     TitleText = "Firmware update needed!"
@@ -48,16 +60,17 @@ $Script:ToastSettings = @{
 $Script:Scenario = 'reminder' # <!-- Possible values are: reminder | short | long | alarm
 # Define BIOS Password
 $Script:BIOSPswd = $null
-# Define path to DAT provisioned XML
-$Script:DATUri = "https://azurefilesnorway.blob.core.windows.net/dat/BIOSPackages.xml"
+# Define path to DAT provisioned XML - must be set
+$Script:DATUri = "<TO BE SET>"
 # Get manufacturer 
 $Script:Manufacturer = (Get-WmiObject -Class "Win32_ComputerSystem" | Select-Object -ExpandProperty Manufacturer).Trim()
-# Registry path for status messages
+# Registry path for status messages - do not edit
 $Script:RegPath = 'HKLM:\SOFTWARE\MSEndpointMgr\BIOSUpdateManagemement'
 
 #EndRegion Declarations 
 
 #Region Functions
+
 function Add-NotificationApp {
     <#
     .SYNOPSIS
@@ -131,32 +144,27 @@ function Add-ToastRebootProtocolHandler{
     .DESCRIPTION
     This function must be run as system and registers the protocal handler for toast reboot. 
     #>    
-    $Protocol = "ToastReboot"
-    $HKCR = Get-PSDrive -Name HKCR -ErrorAction SilentlyContinue
-    If (!($HKCR))
-    {
-        New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT -erroraction silentlycontinue | out-null
+    New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT -ErrorAction SilentlyContinue | out-null
+    $ProtocolHandler = Get-Item 'HKCR:\MSEndpointMgrToastReboot' -ErrorAction SilentlyContinue
+    if (!$ProtocolHandler) {
+        #create handler for reboot
+        New-Item 'HKCR:\MSEndpointMgrToastReboot' -Force
+        Set-Itemproperty 'HKCR:\MSEndpointMgrToastReboot' -Name '(DEFAULT)' -Value 'url:MSEndpointMgrToastReboot' -Force
+        Set-Itemproperty 'HKCR:\MSEndpointMgrToastReboot' -Name 'URL Protocol' -Value '' -Force
+        New-Itemproperty -path 'HKCR:\MSEndpointMgrToastReboot' -PropertyType DWORD -Name 'EditFlags' -Value 2162688
+        New-Item 'HKCR:\MSEndpointMgrToastReboot\Shell\Open\command' -Force
+        Set-Itemproperty 'HKCR:\MSEndpointMgrToastReboot\Shell\Open\command' -Name '(DEFAULT)' -Value 'C:\Windows\System32\shutdown.exe -r -t 60 -c "Your computer will be restarted in 1 minute to complete the BIOS Update process." ' -Force
     }
-    $ProtocolHandler = Get-Item "HKCR:\$Protocol" -ErrorAction SilentlyContinue
-    
-    # Create protocol handler for reboot
-    New-Item "HKCR:\$Protocol" -force
-    Set-Itemproperty "HKCR:\$Protocol" -Name '(DEFAULT)' -Value 'url:ToastReboot' -Force
-    Set-Itemproperty "HKCR:\$Protocol" -Name 'URL Protocol' -Value '' -Force
-    New-Itemproperty -Path "HKCR:\$Protocol" -PropertyType DWORD -Name 'EditFlags' -Value 2162688 -Force
-    New-Item "HKCR:\$Protocol\Shell\Open\command" -Force
-    New-Itemproperty "HKCR:\$Protocol\Shell\Open\command" -Name '(DEFAULT)' -Value 'C:\Windows\System32\shutdown.exe -r -t 60 -c "Your computer will be restarted in 1 minute to complete the BIOS Update process." ' -Force
-    
-    Remove-PSDrive -Name HKCR -Force
+    Remove-PSDrive -Name HKCR -Force -ErrorAction SilentlyContinue
 }#endfunction
 function Test-UserSession {
     #Check if a user is currently logged on before doing user action
     [String]$CurrentlyLoggedOnUser = (Get-WmiObject -Class Win32_ComputerSystem |  Where-Object {$_.Username} | Select-Object UserName).UserName
     if ($CurrentlyLoggedOnUser){
         $SAMName = [String]$CurrentlyLoggedOnUser.Split("\")[1]
-        $UserPath = (Get-ChildItem  -Path HKLM:\SOFTWARE\Microsoft\IdentityStore\LogonCache\ -Recurse -ErrorAction SilentlyContinue | ForEach-Object { if((Get-ItemProperty -Path $_.PsPath) -match $SAMName) {$_.PsPath} } ) | Where-Object {$PSItem -Match 'S-\d-\d{2}-\d-\d{10}-\d{10}-\d{10}-\d{10}'}
-        $FullName = (Get-ItemProperty -Path $UserPath | Select-Object DisplayName).DisplayName
-        $ReturnObject = $FullName
+        #$UserPath = (Get-ChildItem  -Path HKLM:\SOFTWARE\Microsoft\IdentityStore\LogonCache\ -Recurse -ErrorAction SilentlyContinue | ForEach-Object { if((Get-ItemProperty -Path $_.PsPath) -match $SAMName) {$_.PsPath} } ) | Where-Object {$PSItem -Match 'S-\d-\d{2}-\d-\d{10}-\d{10}-\d{10}-\d{10}'}
+        #$FullName = (Get-ItemProperty -Path $UserPath | Select-Object DisplayName).DisplayName
+        $ReturnObject = $SAMName 
     }else {
         $ReturnObject = $false
     }
@@ -185,7 +193,9 @@ function Start-ToastNotification {
     }
     catch { 
         Write-Output -Message 'Something went wrong when displaying the toast notification' -Level Warn     
+        Write-EventLog -LogName $EventLogName -EntryType Warning -EventId 8002 -Source $EventLogSource -Message `"Something went wrong when displaying the toast notification`"
     }
+    Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message `"Toast Notification successfully delivered to logged on user`"
 }
 #Fetching images from uri
 Invoke-WebRequest -Uri $($ToastSettings.LogoImageUri) -OutFile $($ToastSettings.LogoImage)
@@ -217,9 +227,17 @@ Invoke-WebRequest -Uri $($ToastSettings.HeroImageUri) -OutFile $($ToastSettings.
     </binding>
     </visual>
     <actions>
-        <action activationType=`"protocol`" arguments=`"ToastReboot`" content=`"$($ToastSettings.ActionButtonContent)`" />
-        <action activationType=`"system`" arguments=`"dismiss`" content=`"$($ToastSettings.DismissButtonContent)`"/>
+        <input id=`"snoozeTime`" type=`"selection`" defaultInput=`"60`">
+        <selection id=`"1`" content=`"1 minute`"/>
+        <selection id=`"15`" content=`"15 minutes`"/>
+        <selection id=`"60`" content=`"1 hour`"/>
+        <selection id=`"240`" content=`"4 hours`"/>
+        <selection id=`"1440`" content=`"1 day`"/>
+        </input>
+        <action activationType=`"protocol`" arguments=`"MSEndpointMgrToastReboot:`" content=`"$($ToastSettings.ActionButtonContent)`"/>
+        <action activationType=`"system`" arguments=`"snooze`" hint-inputId=`"snoozeTime`" content=`"Snooze`" />
     </actions>
+    <audio src=`"ms-winsoundevent:Notification.Default`"/>
 </toast>
 `"@
 
@@ -233,7 +251,7 @@ $EncodedScript = [System.Convert]::ToBase64String([System.Text.Encoding]::UNICOD
 If (!($ToastGUID)) {
     $ToastGUID = ([guid]::NewGuid()).ToString().ToUpper()
 }
-$Task_TimeToRun = (Get-Date).AddSeconds(30).ToString('s')
+$Task_TimeToRun = (Get-Date).AddSeconds(10).ToString('s')
 $Task_Expiry = (Get-Date).AddSeconds(120).ToString('s')
 $Task_Trigger = New-ScheduledTaskTrigger -Once -At $Task_TimeToRun
 $Task_Trigger.EndBoundary = $Task_Expiry
@@ -243,7 +261,7 @@ $Task_Action = New-ScheduledTaskAction -Execute "C:\WINDOWS\system32\WindowsPowe
 
 $New_Task = New-ScheduledTask -Description "Toast_Notification_$($ToastGuid) Task for user notification" -Action $Task_Action -Principal $Task_Principal -Trigger $Task_Trigger -Settings $Task_Settings
 Register-ScheduledTask -TaskName "Toast_Notification_$($ToastGuid)" -InputObject $New_Task | Out-Null
-Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Toast Notification Task created for logged on user"
+Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Toast Notification Task created for logged on user: Toast_Notification_$($ToastGuid)"
 }#endfunction
 function Invoke-BIOSUpdateHP{
     param (
@@ -266,11 +284,11 @@ function Invoke-BIOSUpdateHP{
     if ($BIOSApprovedVersion -gt $CurrentBIOSVersion){
         $HPBIOSVersions = Get-HPBIOSUpdates
         foreach ($HPBIOSVersion in $HPBIOSVersions.Ver){
-            if ([version]$HPBIOSVersion -eq $ApprovedVersion) {
+            if ([version]$HPBIOSVersion -eq $BIOSApprovedVersion) {
                 $HPVersion = $HPBIOSVersion
             }
         }
-        if ([version]$HPVersion -contains $ApprovedVersion) {
+        if ([version]$HPVersion -contains $BIOSApprovedVersion) {
             # Process BIOS update
             Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Processing BIOS flash update process"
             # Check for BIOS password and update flash cmdline
@@ -293,6 +311,18 @@ function Invoke-BIOSUpdateHP{
                         Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value $HPVersion
                         $OutputMessage = "Updating HP BIOS to version $HPVersion using supplied password"
                         $ExitCode = 0
+                        #Invoke Toast 
+                        if (Test-UserSession){
+                            #User is logged on - send toast to user to perform the reboot
+                            Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "User session found - notify user to reboot with toast"
+                            Invoke-ToastNotification -ToastSettings $ToastSettings -AppID $AppID -Scenario $Scenario
+                        } else {
+                            #No user logged on - enforcing a reboot to finalize BIOS flashing                
+                            Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "No user currenty logged on - restarting computer to finalize BIOS flashing"
+                            $RestartCommand = 'C:\Windows\System32\shutdown.exe'
+                            $RestartArguments = '-r -t 60 -c "Your computer will be restarted in 1 minute to complete the BIOS Update process."'
+                            Start-Process $RestartCommand -ArgumentList $RestartArguments -NoNewWindow
+                        }
                     } else {
                         Write-EventLog -LogName $EventLogName -EntryType Warning -EventId 8002 -Source $EventLogSource -Message "Password is set, but not password is provided. BIOS Update is halted"
                         $OutputMessage = "Password is set, but not password is provided. BIOS Update is halted"
@@ -310,16 +340,27 @@ function Invoke-BIOSUpdateHP{
                     Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateInprogress' -Value 1
                     Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateTime' -Value $Date 
                     Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value $HPVersion
+                    #Invoke Toast 
+                    if (Test-UserSession){
+                        #User is logged on - send toast to user to perform the reboot
+                        Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "User session found - notify user to reboot with toast"
+                        Invoke-ToastNotification -ToastSettings $ToastSettings -AppID $AppID -Scenario $Scenario
+                    } else {
+                        #No user logged on - enforcing a reboot to finalize BIOS flashing                
+                        Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "No user currenty logged on - restarting computer to finalize BIOS flashing"
+                        $RestartCommand = 'C:\Windows\System32\shutdown.exe'
+                        $RestartArguments = '-r -t 60 -c "Your computer will be restarted in 1 minute to complete the BIOS Update process."'
+                        Start-Process $RestartCommand -ArgumentList $RestartArguments -NoNewWindow
+                    }
                     $OutputMessage = "Updated HP BIOS to version $HPVersion"
                     $ExitCode = 0
                 }                
             }
-        } else {
-            $OutputMessage = "BIOS update not found. $ApprovedVersion not found in HP returned values from HP"
+        } 
+        else {
+            $OutputMessage = "BIOS update not found. $BIOSApprovedVersion not found in HP returned values from HP"
             $ExitCode = 1
         }
-        $OutputMessage = "BIOS version $ApprovedVersion has been prestaged. Restart required."
-        $ExitCode = 0
     } 
     elseif ($BIOSApprovedVersion -eq $CurrentBIOSVersion) {
         $OutputMessage = "BIOS is current on version $CurrentBIOSVersion"
@@ -444,6 +485,11 @@ $BIOSPackageDetails = $BIOSPackages.ArrayOfCMPackage.CMPackage
 Add-NotificationApp -AppID $AppID -AppDisplayName $AppDisplayName -IconUri $IconUri | Out-Null
 Add-ToastRebootProtocolHandler | Out-Null
 
+#Verify Toast Media folder exists
+if (-not (Test-Path $ToastMediafolder)){
+    New-Item -Path $ToastMediafolder -ItemType Directory | Out-Null
+}
+
 # Validate applicability
 switch -Wildcard ($Manufacturer) { 
     {($PSItem -match "HP") -or ($PSItem -match "Hewlett-Packard")}{
@@ -555,9 +601,9 @@ if ($BiosUpdateinProgress -ne 0){
         if ($BIOSCheck.ExitCode -eq 0){
             Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "Update Completed"
             Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateInprogress' -Value 0
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateAttempts' -Value 0 -PropertyType 'DWORD'
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateTime' -Value "" -PropertyType 'String'
-            Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value "" -PropertyType 'String'
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateAttempts' -Value 0 
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSUpdateTime' -Value "" 
+            Set-ItemProperty -Path "$RegPath" -Name 'BIOSDeployedVersion' -Value "" 
             Write-Output "$($BIOSCheck.Message)"
             Write-EventLog -LogName $EventLogName -EntryType Information -EventId 8001 -Source $EventLogSource -Message "$($BIOSCheck.Message)"
             Exit 0
