@@ -12,7 +12,7 @@
 .NOTES
     FileName:    Invoke-CustomInventory.ps1
     Author:      Jan Ketil Skanke
-    Contributor: Sandy Zeng
+    Contributor: Sandy Zeng/Maurice Daly
     Contact:     @JankeSkanke
     Created:     2021-01-02
     Updated:     2021-04-05
@@ -21,15 +21,18 @@
     0.9.0 - (2021-01-02) Script created
     1.0.0 - (2021-01-02) Script polished cleaned up. 
     1.0.1 - (2021-04-05) Added NetworkAdapter array and fixed typo
+    1.1.0 - (2021-09-01) Removed all location information for privacy reasons 
+    2.0.0 - (2021-09-08) Added section to cater for BIOS release version information, for HP, Dell and Lenovo and general bugfixes
+    2.0.1 - (2021-21-10) Added MACAddress to the inventory for each NIC. 
 #>
 #region initialize
 # Enable TLS 1.2 support 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 # Replace with your Log Analytics Workspace ID
-$CustomerId = "b939cc86-9316-49b2-afe8-251174b12c82"  
+$CustomerId = ""  
 
 # Replace with your Primary Key
-$SharedKey = "xrEIhUQOuMdh8I3lhM04Z6iK52NdF4YujZh/ma3ACUk7X1vSM1oYrMAvgDBNHHz8Rhhg9xZypH50tj3PUGa4yQ=="
+$SharedKey = ""
 
 #Control if you want to collect App or Device Inventory or both (True = Collect)
 $CollectAppInventory = $true
