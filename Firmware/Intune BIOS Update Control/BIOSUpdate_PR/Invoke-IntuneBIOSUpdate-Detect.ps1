@@ -9,7 +9,7 @@
 .EXAMPLE
 	Invoke-IntuneBIOSUpdateDetect.ps1 - Run as SYSTEM 
 .NOTES
-	Version:    1.0
+	Version:    0.9 Beta
     Author:     Maurice Daly / Jan Ketil Skanke @ Cloudway
     Contact:    @JankeSkanke @Modaly_IT
     Creation Date:  01.10.2021
@@ -17,7 +17,7 @@
     Created:     2021-14-11
     Updated:     
     Version history:
-    1.0.0 - (2021.14.11) Script created
+    0.9 - (2021.14.11) Beta Release
 #>
 #Region Initialisations
 # Set Error Action to Silently Continue
