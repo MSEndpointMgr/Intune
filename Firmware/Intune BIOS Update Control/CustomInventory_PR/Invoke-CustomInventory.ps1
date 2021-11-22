@@ -85,43 +85,7 @@ function Get-AzureADDeviceID {
 		}
 	}
 } #endfunction 
-# Function to get Azure AD DeviceID
-function Get-AzureADDeviceID {
-    <#
-    .SYNOPSIS
-        Get the Azure AD device ID from the local device.
-    
-    .DESCRIPTION
-        Get the Azure AD device ID from the local device.
-    
-    .NOTES
-        Author:      Nickolaj Andersen
-        Contact:     @NickolajA
-        Created:     2021-05-26
-        Updated:     2021-05-26
-    
-        Version history:
-        1.0.0 - (2021-05-26) Function created
-    #>
-	Process {
-		# Define Cloud Domain Join information registry path
-		$AzureADJoinInfoRegistryKeyPath = "HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo"
-		
-		# Retrieve the child key name that is the thumbprint of the machine certificate containing the device identifier guid
-		$AzureADJoinInfoThumbprint = Get-ChildItem -Path $AzureADJoinInfoRegistryKeyPath | Select-Object -ExpandProperty "PSChildName"
-		if ($AzureADJoinInfoThumbprint -ne $null) {
-			# Retrieve the machine certificate based on thumbprint from registry key
-			$AzureADJoinCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" -Recurse | Where-Object { $PSItem.Thumbprint -eq $AzureADJoinInfoThumbprint }
-			if ($AzureADJoinCertificate -ne $null) {
-				# Determine the device identifier from the subject name
-				$AzureADDeviceID = ($AzureADJoinCertificate | Select-Object -ExpandProperty "Subject") -replace "CN=", ""
-				# Handle return value
-				return $AzureADDeviceID
-			}
-		}
-	}
-} #endfunction 
-# Function to get Azure AD Device Join Date
+# Function to get Azure AD Device Join Date (Currently not used - for future functionality)
 function Get-AzureADJoinDate {
     <#
     .SYNOPSIS
@@ -226,36 +190,7 @@ Function Send-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
     $statusmessage = "$($response.StatusCode) : $($payloadsize)"
     return $statusmessage 
 }#end function
-function Start-PowerShellSysNative {
-    param (
-        [parameter(Mandatory = $false, HelpMessage = "Specify arguments that will be passed to the sysnative PowerShell process.")]
-        [ValidateNotNull()]
-        [string]$Arguments
-    )
-
-    # Get the sysnative path for powershell.exe
-    $SysNativePowerShell = Join-Path -Path ($PSHOME.ToLower().Replace("syswow64", "sysnative")) -ChildPath "powershell.exe"
-
-    # Construct new ProcessStartInfo object to run scriptblock in fresh process
-    $ProcessStartInfo = New-Object -TypeName System.Diagnostics.ProcessStartInfo
-    $ProcessStartInfo.FileName = $SysNativePowerShell
-    $ProcessStartInfo.Arguments = $Arguments
-    $ProcessStartInfo.RedirectStandardOutput = $true
-    $ProcessStartInfo.RedirectStandardError = $true
-    $ProcessStartInfo.UseShellExecute = $false
-    $ProcessStartInfo.WindowStyle = "Hidden"
-    $ProcessStartInfo.CreateNoWindow = $true
-
-    # Instatiate the new 64-bit process
-    $Process = [System.Diagnostics.Process]::Start($ProcessStartInfo)
-
-    # Read standard error output to determine if the 64-bit script process somehow failed
-    $ErrorOutput = $Process.StandardError.ReadToEnd()
-    if ($ErrorOutput) {
-        Write-Error -Message $ErrorOutput
-    }
-}#endfunction
-#Function to get AzureAD DeviceID
+#Function to get AzureAD TenantID
 function Get-AzureADTenantID {
 	# Cloud Join information registry path
 	$AzureADTenantInfoRegistryKeyPath = "HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\TenantInfo"
