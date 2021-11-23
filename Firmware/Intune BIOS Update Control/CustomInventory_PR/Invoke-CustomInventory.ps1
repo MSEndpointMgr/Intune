@@ -324,15 +324,15 @@ if ($CollectDeviceInventory) {
 	switch -Wildcard ($ComputerManufacturer) {
 		"*Microsoft*" {
 			$ComputerManufacturer = "Microsoft"
-			$ComputerModel = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
-			$ComputerSystemSKU = Get-WmiObject -Namespace root\wmi -Class MS_SystemInformation | Select-Object -ExpandProperty SystemSKU
+			$ComputerModel = (Get-CIMInstance -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
+			$ComputerSystemSKU = Get-CIMInstance -Namespace root\wmi -Class MS_SystemInformation | Select-Object -ExpandProperty SystemSKU
 		}
 		"*HP*" {
-			$ComputerModel = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
+			$ComputerModel = (Get-CIMInstance  -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
 			$ComputerSystemSKU = (Get-CIMInstance -ClassName MS_SystemInformation -NameSpace root\WMI).BaseBoardProduct.Trim()
 			
 			# Obtain current BIOS release
-			$CurrentBIOSProperties = (Get-WmiObject -Class Win32_BIOS | Select-Object -Property *)
+			$CurrentBIOSProperties = (Get-CIMInstance -Class Win32_BIOS | Select-Object -Property *)
 			
 			# Detect new versus old BIOS formats
 			switch -wildcard ($($CurrentBIOSProperties.SMBIOSBIOSVersion)) {
@@ -350,20 +350,20 @@ if ($CollectDeviceInventory) {
 		}
 		"*Dell*" {
 			$ComputerManufacturer = "Dell"
-			$ComputerModel = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
+			$ComputerModel = (Get-CIMInstance -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).Trim()
 			$ComputerSystemSKU = (Get-CIMInstance -ClassName MS_SystemInformation -NameSpace root\WMI).SystemSku.Trim()
 			
 			# Obtain current BIOS release
-			$ComputerBiosVersion = (Get-WmiObject -Class Win32_BIOS | Select-Object -ExpandProperty SMBIOSBIOSVersion).Trim()
+			$ComputerBiosVersion = (Get-CIMInstance -Class Win32_BIOS | Select-Object -ExpandProperty SMBIOSBIOSVersion).Trim()
 			
 		}
 		"*Lenovo*" {
 			$ComputerManufacturer = "Lenovo"
-			$ComputerModel = (Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Version).Trim()
-			$ComputerSystemSKU = ((Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).SubString(0, 4)).Trim()
+			$ComputerModel = (Get-CIMInstance -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Version).Trim()
+			$ComputerSystemSKU = ((Get-CIMInstance -Class Win32_ComputerSystem | Select-Object -ExpandProperty Model).SubString(0, 4)).Trim()
 			
 			# Obtain current BIOS release
-			$CurrentBIOSProperties = (Get-WmiObject -Class Win32_BIOS | Select-Object -Property *)
+			$CurrentBIOSProperties = (Get-CIMInstance -Class Win32_BIOS | Select-Object -Property *)
 			
 			# Obtain current BIOS release
 			#$ComputerBiosVersion = ((Get-WmiObject -Class Win32_BIOS | Select-Object -Property *).SMBIOSBIOSVersion).SubString(0, 8)
