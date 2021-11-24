@@ -24,6 +24,7 @@
     2.0.1 (2021-09-01) Removed all location information for privacy reasons 
     2.1 - (2021-09-08) Added section to cater for BIOS release version information, for HP, Dell and Lenovo and general bugfixes
     2.1.1 - (2021-21-10) Added MACAddress to the inventory for each NIC. 
+	2.1.2 - (2021-24-11) Added SMBIOSAssetTag and cleaned up ununsed function Start-FileDownload
 #>
 #region initialize
 # Enable TLS 1.2 support 
@@ -234,7 +235,7 @@ if ($CollectDeviceInventory) {
 	
 	# Get Computer Inventory Information 
 	$ComputerOSInfo = Get-CimInstance -ClassName Win32_OperatingSystem
-	$ComputerBiosInfo = Get-CimInstance -ClassName Win32_Bios
+	$ComputerBIOSInfo = Get-CimInstance -ClassName Win32_BIOS
 	$ComputerModel = $ComputerInfo.Model
 	$ComputerLastBoot = $ComputerOSInfo.LastBootUpTime
 	$ComputerUptime = [int](New-TimeSpan -Start $ComputerLastBoot -End $Date).Days
@@ -247,10 +248,11 @@ if ($CollectDeviceInventory) {
 	}
 	$ComputerOSName = $ComputerOSInfo.Caption
 	$ComputerSystemSkuNumber = $ComputerInfo.SystemSKUNumber
-	$ComputerSerialNr = $ComputerBiosInfo.SerialNumber
-	$ComputerBiosUUID = Get-CimInstance Win32_ComputerSystemProduct | Select-Object -ExpandProperty UUID
-	$ComputerBiosVersion = $ComputerBiosInfo.SMBIOSBIOSVersion
-	$ComputerBiosDate = $ComputerBiosInfo.ReleaseDate
+	$ComputerSerialNr = $ComputerBIOSInfo.SerialNumber
+	$ComputerBIOSUUID = Get-CimInstance Win32_ComputerSystemProduct | Select-Object -ExpandProperty UUID
+	$ComputerBIOSVersion = $ComputerBIOSInfo.SMBIOSBIOSVersion
+	$ComputerBIOSDate = $ComputerBIOSInfo.ReleaseDate
+	$ComputerSMBIOSAssetTag = Get-CimInstance Win32_SystemEnclosure | Select-Object -expandproperty SMBIOSAssetTag 
 	$ComputerFirmwareType = $env:firmware_type
 	$PCSystemType = $ComputerInfo.PCSystemType
 		switch ($PCSystemType){
@@ -338,13 +340,13 @@ if ($CollectDeviceInventory) {
 			switch -wildcard ($($CurrentBIOSProperties.SMBIOSBIOSVersion)) {
 				"*ver*" {
 					if ($CurrentBIOSProperties.SMBIOSBIOSVersion -match '.F.\d+$') {
-						$ComputerBiosVersion = ($CurrentBIOSProperties.SMBIOSBIOSVersion -split "Ver.")[1].Trim()
+						$ComputerBIOSVersion = ($CurrentBIOSProperties.SMBIOSBIOSVersion -split "Ver.")[1].Trim()
 					} else {
-						$ComputerBiosVersion = [System.Version]::Parse(($CurrentBIOSProperties.SMBIOSBIOSVersion).TrimStart($CurrentBIOSProperties.SMBIOSBIOSVersion.Split(".")[0]).TrimStart(".").Trim().Split(" ")[0])
+						$ComputerBIOSVersion = [System.Version]::Parse(($CurrentBIOSProperties.SMBIOSBIOSVersion).TrimStart($CurrentBIOSProperties.SMBIOSBIOSVersion.Split(".")[0]).TrimStart(".").Trim().Split(" ")[0])
 					}
 				}
 				default {
-					$ComputerBiosVersion = "$($CurrentBIOSProperties.SystemBiosMajorVersion).$($CurrentBIOSProperties.SystemBiosMinorVersion)"
+					$ComputerBIOSVersion = "$($CurrentBIOSProperties.SystemBIOSMajorVersion).$($CurrentBIOSProperties.SystemBIOSMinorVersion)"
 				}
 			}
 		}
@@ -354,7 +356,7 @@ if ($CollectDeviceInventory) {
 			$ComputerSystemSKU = (Get-CIMInstance -ClassName MS_SystemInformation -NameSpace root\WMI).SystemSku.Trim()
 			
 			# Obtain current BIOS release
-			$ComputerBiosVersion = (Get-CIMInstance -Class Win32_BIOS | Select-Object -ExpandProperty SMBIOSBIOSVersion).Trim()
+			$ComputerBIOSVersion = (Get-CIMInstance -Class Win32_BIOS | Select-Object -ExpandProperty SMBIOSBIOSVersion).Trim()
 			
 		}
 		"*Lenovo*" {
@@ -366,8 +368,8 @@ if ($CollectDeviceInventory) {
 			$CurrentBIOSProperties = (Get-CIMInstance -Class Win32_BIOS | Select-Object -Property *)
 			
 			# Obtain current BIOS release
-			#$ComputerBiosVersion = ((Get-WmiObject -Class Win32_BIOS | Select-Object -Property *).SMBIOSBIOSVersion).SubString(0, 8)
-			$ComputerBiosVersion = "$($CurrentBIOSProperties.SystemBiosMajorVersion).$($CurrentBIOSProperties.SystemBiosMinorVersion)"
+			#$ComputerBIOSVersion = ((Get-WmiObject -Class Win32_BIOS | Select-Object -Property *).SMBIOSBIOSVersion).SubString(0, 8)
+			$ComputerBIOSVersion = "$($CurrentBIOSProperties.SystemBIOSMajorVersion).$($CurrentBIOSProperties.SystemBIOSMinorVersion)"
 		}
 	}
 	
@@ -450,9 +452,10 @@ if ($CollectDeviceInventory) {
 	$Inventory | Add-Member -MemberType NoteProperty -Name "AUMetered" -Value "$ComputerAUMetered" -Force
 	$Inventory | Add-Member -MemberType NoteProperty -Name "SystemSkuNumber" -Value "$ComputerSystemSkuNumber" -Force
 	$Inventory | Add-Member -MemberType NoteProperty -Name "SerialNumber" -Value "$ComputerSerialNr" -Force
-	$Inventory | Add-Member -MemberType NoteProperty -Name "SMBIOSUUID" -Value "$ComputerBiosUUID" -Force
-	$Inventory | Add-Member -MemberType NoteProperty -Name "BiosVersion" -Value "$ComputerBiosVersion" -Force
-	$Inventory | Add-Member -MemberType NoteProperty -Name "BiosDate" -Value "$ComputerBiosDate" -Force
+	$Inventory | Add-Member -MemberType NoteProperty -Name "SMBIOSUUID" -Value "$ComputerBIOSUUID" -Force
+	$Inventory | Add-Member -MemberType NoteProperty -Name "SMBIOSAssetTag" -Value "$ComputerSMBIOSAssetTag" -Force
+	$Inventory | Add-Member -MemberType NoteProperty -Name "BIOSVersion" -Value "$ComputerBIOSVersion" -Force
+	$Inventory | Add-Member -MemberType NoteProperty -Name "BIOSDate" -Value "$ComputerBIOSDate" -Force
 	$Inventory | Add-Member -MemberType NoteProperty -Name "SystemSKU" -Value "$ComputerSystemSKU" -Force
 	$Inventory | Add-Member -MemberType NoteProperty -Name "FirmwareType" -Value "$ComputerFirmwareType" -Force
 	$Inventory | Add-Member -MemberType NoteProperty -Name "Memory" -Value "$ComputerPhysicalMemory" -Force
