@@ -63,10 +63,11 @@ function Get-AzureADDeviceID {
         Author:      Nickolaj Andersen
         Contact:     @NickolajA
         Created:     2021-05-26
-        Updated:     2021-05-26
+        Updated:     2021-11-30
     
         Version history:
         1.0.0 - (2021-05-26) Function created
+	1.0.1 - (2021-11-30) Added case for Registry ChildName is guid instead of thumbprint
     #>
 	Process {
 		# Define Cloud Domain Join information registry path
@@ -74,6 +75,12 @@ function Get-AzureADDeviceID {
 		
 		# Retrieve the child key name that is the thumbprint of the machine certificate containing the device identifier guid
 		$AzureADJoinInfoThumbprint = Get-ChildItem -Path $AzureADJoinInfoRegistryKeyPath | Select-Object -ExpandProperty "PSChildName"
+		# If thumprint is a guid, it will be the AzurADDeviceID
+		if([Guid]::TryParse("$AzureADJoinInfoThumbprint",$([ref][Guid]::Empty)))
+		{
+		    return $AzureADJoinInfoThumbprint
+		}
+	
 		if ($AzureADJoinInfoThumbprint -ne $null) {
 			# Retrieve the machine certificate based on thumbprint from registry key
 			$AzureADJoinCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" -Recurse | Where-Object { $PSItem.Thumbprint -eq $AzureADJoinInfoThumbprint }
