@@ -14,6 +14,7 @@ Client Conditions Checked
 -CheckTelemetryOptIn
 -CheckConnectivityURL(s)
 -CheckUtcCsp
+-CheckDiagtrackDLLVersion
 -CheckDiagtrackService
 -CheckMSAService
 -CheckAllowDeviceNameInTelemetry
@@ -37,8 +38,11 @@ Proactive Remediation Predetection Output: <JSON>
 
 .Notes
 Created on:   04/12/2021
-Created by:   Ben Whitmore @MSEndpointMgr
+Created by:   Ben Whitmore @CloudWay
 Filename:     Check-UpdateComplianceSettings.ps1
+
+**Version 1.0.08.12 - 07/12/21
+- Changed .net webrequest method to Test-NetConnection
 
 **Version 1.0.07.12 - 07/12/21
 - Fixed padding issue for diagtrack test
@@ -84,25 +88,31 @@ All Tests Passed
 Parameter "ExportJSON" Example Output
 -------------------------------------------
 
-[{"Test":"CheckSqmID","Status":"Passed","Result":"SQMID found in registry"},
-{"Test":"CheckCommercialIDValue1","Status":"Passed","Result":"Valid GUID found in registry key value"},
-{"Test":"CheckCommercialIDValue2","Status":"Info","Result":"CommercialID value is empty"},
-{"Test":"CheckCommercialIDOverallStatus","Status":"Passed","Result":"CommercialID registry key value 1 is valid"},
-{"Test":"CheckTelemetryOptIn1","Status":"Info","Result":"AllowTelemetry value is empty"},
-{"Test":"CheckTelemetryOptIn2","Status":"Passed","Result":"AllowTelemetry value is 3"},
-{"Test":"CheckTelemetryOptIn3","Status":"Passed","Result":"AllowTelemetry_PolicyManager value is 3"},
-{"Test":"CheckTelemetryOptInOverallStatus","Status":"Passed","Result":"AllowTelemetry_PolicyManager registry key found and wins"},
-{"Test":"CheckConnectivityURL1","Status":"Passed","Result":"https://v10c.events.data.microsoft.com/ping accessible"},
-{"Test":"CheckConnectivityURL2","Status":"Passed","Result":"https://login.live.com accessible"},
-{"Test":"CheckConnectivityOverallResult","Status":"Passed","Result":"All of the required URLs are accesible"},
-{"Test":"CheckUtcCsp","Status":"Passed","Result":"UTC CSP verified"},
-{"Test":"CheckDiagtrackService","Status":"Passed","Result":"Diagtrack service is running"},
-{"Test":"CheckMSAService","Status":"Passed","Result":"MSAService is set to Manual (Triggered Start) but is not running"},
-{"Test":"CheckAllowDeviceName","Status":"Passed","Result":"AllowDeviceNameInTelemetry value is 1"},
-{"Test":"CheckAllowUpdateComplianceProcessing","Status":"Passed","Result":"AllowUpdateComplianceProcessing value is 16"},
-{"Test":"CheckAllowWUfBCloudProcessing","Status":"Passed","Result":"AllowWUfBCloudProcessing value is 8"},
-{"Test":"CheckConfigureTelemetryOptInChangeNotification","Status":"Passed","Result":"ConfigureTelemetryOptInChangeNotification value is 1"},
-{"Test":"CheckConfigureTelemetryOptInSettingsUx","Status":"Passed","Result":"ConfigureTelemetryOptInSettingsUx value is 1"}]
+Test                                           Status Result
+----                                           ------ ------
+CheckSqmID                                     Passed SQMID found in registry
+CheckCommercialIDValue1                        Passed Valid GUID found in registry key value
+CheckCommercialIDValue2                        Info   CommercialID value is empty
+CheckCommercialIDOverallStatus                 Passed CommercialID registry key value 1 is valid
+CheckTelemetryOptIn1                           Info   AllowTelemetry value is empty
+CheckTelemetryOptIn2                           Passed AllowTelemetry value is 3
+CheckTelemetryOptIn3                           Passed AllowTelemetry_PolicyManager value is 3
+CheckTelemetryOptInOverallStatus               Passed AllowTelemetry_PolicyManager registry key found and wins
+CheckConnectivityURL1                          Passed v10c.events.data.microsoft.com accessible
+CheckConnectivityURL2                          Passed settings-win.data.microsoft.com accessible
+CheckConnectivityURL3                          Passed adl.windows.com accessible
+CheckConnectivityURL4                          Passed watson.telemetry.microsoft.com accessible
+CheckConnectivityURL5                          Passed oca.telemetry.microsoft.com accessible
+CheckConnectivityURL6                          Passed login.live.com accessible
+CheckConnectivityOverallResult                 Passed All of the required URLs are accesible
+CheckUtcCsp                                    Passed UTC CSP verified
+CheckDiagtrackService                          Passed Diagtrack service is running
+CheckMSAService                                Passed MSAService is set to Manual (Triggered Start) but is not running
+CheckAllowDeviceName                           Passed AllowDeviceNameInTelemetry value is 1
+CheckAllowUpdateComplianceProcessing           Passed AllowUpdateComplianceProcessing value is 16
+CheckAllowWUfBCloudProcessing                  Passed AllowWUfBCloudProcessing value is 8
+CheckConfigureTelemetryOptInChangeNotification Passed ConfigureTelemetryOptInChangeNotification value is 1
+CheckConfigureTelemetryOptInSettingsUx         Passed ConfigureTelemetryOptInSettingsUx value is 1
 
 .Example 
 Check-UpdateComplianceSetting.ps1
@@ -123,13 +133,13 @@ Param(
 )
 
 #ConnectivityURLs
-$global:ConnectivityURL = @(
-    "https://v10c.events.data.microsoft.com/ping"
-    #"https://settings-win.data.microsoft.com"
-    #"http://adl.windows.com"
-    #"https://watson.telemetry.microsoft.com"
-    #"https://oca.telemetry.microsoft.com"
-    "https://login.live.com"
+$global:ConnectivityEndpoint = @(
+    "v10c.events.data.microsoft.com"
+    "settings-win.data.microsoft.com"
+    "adl.windows.com"
+    "watson.telemetry.microsoft.com"
+    "oca.telemetry.microsoft.com"
+    "login.live.com"
 )
 
 #OS Version
@@ -396,31 +406,31 @@ function CheckConnectivity {
     $CheckConnectivityOverallStatus = $false
     Try {   
 
-        Foreach ($URL in $global:ConnectivityURL) {
+        Foreach ($Endpoint in $global:ConnectivityEndpoint) {
+            $Request = $null
             Try {
                 $i ++
-                $Request = [System.Net.WebRequest]::Create($URL)
-                $Response = $Request.getResponse()
+                $Request = (Test-NetConnection $Endpoint -Port 443).TcpTestSucceeded
 
-                If ($Response.StatusCode -eq 'OK') {
-                    Write-Array -Status "Passed" -Test "CheckConnectivityURL$($i)" -Result "$($URL) accessible"
+                If ($Request -eq 'True') {
+                    Write-Array -Status "Passed" -Test "CheckConnectivityEndpoint$($i)" -Result "$($Endpoint) accessible"
                 }
                 Else {
-                    Write-Array -Status "Failed" -Test "CheckConnectivityURL$($i)" -Result "Failed. Could not access $($URL)"
+                    Write-Array -Status "Failed" -Test "CheckConnectivityEndpoint$($i)" -Result "Failed. Could not access $($Endpoint)"
                     $CheckConnectivityOverallStatus = $true
                 }
             }
             Catch {
-                Write-Array -Status "Failed" -Test "CheckConnectivityURL$($i)" -Result "Failed. Could not access $($URL)"
+                Write-Array -Status "Failed" -Test "CheckConnectivityEndpoint$($i)" -Result "Failed. Could not access $($Endpoint)"
                 $CheckConnectivityOverallStatus = $true
             }
         }
 
         If ($CheckConnectivityOverallStatus) {
-            Write-Array -Status "Failed" -Test "CheckConnectivityOverallResult" -Result "At least one of the required URLs is not accesible"
+            Write-Array -Status "Failed" -Test "CheckConnectivityOverallResult" -Result "At least one of the required endpoints is not accessible"
         }
         else {
-            Write-Array -Status "Passed" -Test "CheckConnectivityOverallResult" -Result "All of the required URLs are accesible"
+            Write-Array -Status "Passed" -Test "CheckConnectivityOverallResult" -Result "All of the required endpoints are accessible"
         }
     }
     Catch {
@@ -465,7 +475,7 @@ function CheckDiagtrackService {
             [string]$diagtrackVersionFormatted = $majorPart + $dot + $minorPart + $dot + $buildPart
 
             if ([int]$diagtrackVersion -lt 10010586 ) {
-                Write-Array -Status "Warning" -Test "CheckDiagtrackService" -Result "Unexpected Version $($diagtrackVersion)"
+                Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersion)"
             }
 
             [string]$minRevision = "0" 
@@ -474,30 +484,30 @@ function CheckDiagtrackService {
                     $minRevision = "2513"
                     $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
 
-                    Write-Array -Status "Warning" -Test "CheckDiagtrackService" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
+                    Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10015063 -and [int]$fileRevision -lt 1356) {
                     $minRevision = "1356"
                     $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
-                    Write-Array -Status "Warning" -Test "CheckDiagtrackService" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
+                    Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10016299 -and [int]$fileRevision -lt 696) {
                     $minRevision = "696"
                     $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
-                    Write-Array -Status "Warning" -Test "CheckDiagtrackService" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
+                    Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10017134 -and [int]$fileRevision -lt 320) {
                     $minRevision = "320"
                     $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
-                    Write-Array -Status "Warning" -Test "CheckDiagtrackService" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
+                    Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
             }
         }
         else {
-            Write-Array -Status "Failed" -Test "CheckDiagtrackService" -Result "DLL not found at C:\Windows\System32\diagtrack.dll"
+            Write-Array -Status "Failed" -Test "CheckDiagtrackDLLVersion" -Result "DLL not found at C:\Windows\System32\diagtrack.dll"
         }
 
         $serviceName = "diagtrack"
