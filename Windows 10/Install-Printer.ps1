@@ -42,7 +42,7 @@ $Throwbad = $Null
 #Run script in 64bit PowerShell to enumerate correct path for pnputil
 If ($ENV:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
     Try {
-        &"$ENV:WINDIR\SysNative\WindowsPowershell\v1.0\PowerShell.exe" -File $PSCOMMANDPATH
+        &"$ENV:WINDIR\SysNative\WindowsPowershell\v1.0\PowerShell.exe" -File $PSCOMMANDPATH -PortName $PortName -PrinterIP $PrinterIP -DriverName $DriverName -PrinterName $PrinterName -INFFile $INFFile
     }
     Catch {
         Write-Error "Failed to start $PSCOMMANDPATH"
@@ -103,8 +103,8 @@ If (-not $ThrowBad) {
 
         #Stage driver to driver store
         Write-LogEntry -Stamp -Value "Staging Driver to Windows Driver Store using INF ""$($INFFile)"""
-        Write-LogEntry -Stamp -Value "Running command: Start-Process C:\Windows\system32\pnputil.exe -ArgumentList $($INFARGS) -wait -passthru"
-        Start-Process C:\Windows\System32\pnputil.exe -ArgumentList $INFARGS -wait -passthru
+        Write-LogEntry -Stamp -Value "Running command: Start-Process pnputil.exe -ArgumentList $($INFARGS) -wait -passthru"
+        Start-Process pnputil.exe -ArgumentList $INFARGS -wait -passthru
 
     }
     Catch {
