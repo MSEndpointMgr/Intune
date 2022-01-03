@@ -36,6 +36,21 @@ Param (
     [String]$INFFile
 )
 
+#Reset Error catching variable
+$Throwbad = $Null
+
+#Run script in 64bit PowerShell to enumerate correct path for pnputil
+If ($ENV:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
+    Try {
+        &"$ENV:WINDIR\SysNative\WindowsPowershell\v1.0\PowerShell.exe" -File $PSCOMMANDPATH
+    }
+    Catch {
+        Write-Error "Failed to start $PSCOMMANDPATH"
+        Write-Warning "$($_.Exception.Message)"
+        $Throwbad = $True
+    }
+}
+
 function Write-LogEntry {
     param (
         [parameter(Mandatory = $true)]
@@ -82,23 +97,23 @@ $INFARGS = @(
     "$INFFile"
 )
 
-#Reset Error catching variable
-$Throwbad = $Null
+If (-not $ThrowBad) {
 
-Try {
+    Try {
 
-    #Stage driver to driver store
-    Write-LogEntry -Stamp -Value "Staging Driver to Windows Driver Store using INF ""$($INFFile)"""
-    Write-LogEntry -Stamp -Value "Running command: Start-Process C:\Windows\system32\pnputil.exe -ArgumentList $($INFARGS) -wait -passthru"
-    Start-Process C:\Windows\System32\pnputil.exe -ArgumentList $INFARGS -wait -passthru
+        #Stage driver to driver store
+        Write-LogEntry -Stamp -Value "Staging Driver to Windows Driver Store using INF ""$($INFFile)"""
+        Write-LogEntry -Stamp -Value "Running command: Start-Process C:\Windows\system32\pnputil.exe -ArgumentList $($INFARGS) -wait -passthru"
+        Start-Process C:\Windows\System32\pnputil.exe -ArgumentList $INFARGS -wait -passthru
 
-}
-Catch {
-    Write-Warning "Error staging driver to Driver Store"
-    Write-Warning "$($_.Exception.Message)"
-    Write-LogEntry -Stamp -Value "Error staging driver to Driver Store"
-    Write-LogEntry -Stamp -Value "$($_.Exception)"
-    $ThrowBad = $True
+    }
+    Catch {
+        Write-Warning "Error staging driver to Driver Store"
+        Write-Warning "$($_.Exception.Message)"
+        Write-LogEntry -Stamp -Value "Error staging driver to Driver Store"
+        Write-LogEntry -Stamp -Value "$($_.Exception)"
+        $ThrowBad = $True
+    }
 }
 
 If (-not $ThrowBad) {
@@ -161,10 +176,13 @@ If (-not $ThrowBad) {
             Add-Printer -Name $PrinterName -DriverName $DriverName -PortName $PortName -Confirm:$false
         }
 
-        if (-not $PrinterExist) {
-            Write-LogEntry -Stamp -Value "Printer ""$($PrinterName)"" was not found after installation"
+        $PrinterExist2 = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
+        if ($PrinterExist2) {
+            Write-LogEntry -Stamp -Value "Printer ""$($PrinterName)"" added successfully"
+        }
+        else {
             Write-Warning "Error creating Printer"
-            Write-LogEntry -Stamp -Value "Error creating Printer"
+            Write-LogEntry -Stamp -Value "Printer ""$($PrinterName)"" error creating printer"
             $ThrowBad = $True
         }
     }
