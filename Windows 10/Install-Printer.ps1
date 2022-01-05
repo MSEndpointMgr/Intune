@@ -122,7 +122,7 @@ If (-not $ThrowBad) {
         #Install driver
         $DriverExist = Get-PrinterDriver -Name $DriverName -ErrorAction SilentlyContinue
         if (-not $DriverExist) {
-            Write-LogEntry -Stamp Value "Adding Printer Driver ""$($DriverName)"""
+            Write-LogEntry -Stamp -Value "Adding Printer Driver ""$($DriverName)"""
             Add-PrinterDriver -Name $DriverName -Confirm:$false
         }
         else {
