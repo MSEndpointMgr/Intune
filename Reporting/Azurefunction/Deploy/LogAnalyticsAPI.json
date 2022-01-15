@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.4.1124.51302",
-      "templateHash": "8549984741454627897"
+      "templateHash": "441968559681243774"
     }
   },
   "parameters": {
@@ -227,7 +227,8 @@
             "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('FunctionAppName')), '2020-12-01', 'full').identity.principalId]",
             "permissions": {
               "secrets": [
-                "get"
+                "get",
+                "list"
               ]
             }
           }
