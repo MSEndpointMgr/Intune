@@ -97,6 +97,7 @@ resource FunctionApp 'Microsoft.Web/sites@2020-12-01' = {
   properties: {
     serverFarmId: appserviceplan.id
     containerSize: 1536
+    httpsOnly: true
     siteConfig: {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'

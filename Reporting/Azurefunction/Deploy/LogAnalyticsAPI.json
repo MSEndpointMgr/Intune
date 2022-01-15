@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.4.1124.51302",
-      "templateHash": "441968559681243774"
+      "templateHash": "9233382603265457021"
     }
   },
   "parameters": {
@@ -139,6 +139,7 @@
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionAppServicePlanName'))]",
         "containerSize": 1536,
+        "httpsOnly": true,
         "siteConfig": {
           "ftpsState": "Disabled",
           "minTlsVersion": "1.2",
