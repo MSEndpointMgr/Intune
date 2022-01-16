@@ -1,5 +1,4 @@
-The latest version can be found here: 
+Inventory Proactive Remediations scripts are moved to a new home: 
+https://github.com/MSEndpointMgr/IntuneEnhancedInventory/tree/main/Proactive%20Remediation
 
-https://github.com/MSEndpointMgr/Intune/blob/master/Firmware/Intune%20BIOS%20Update%20Control/CustomInventory_PR/Invoke-CustomInventory.ps1
-
-The version in this folder is deprecated
+The files in this folder is deprecated
