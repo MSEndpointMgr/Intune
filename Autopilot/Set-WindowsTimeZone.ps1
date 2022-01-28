@@ -15,13 +15,14 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-05-19
-    Updated:     2020-12-22
+    Updated:     2022-01-28
 
     Version history:
     1.0.0 - (2020-05-19) - Script created
     1.0.1 - (2020-05-23) - Added registry key presence check for lfsvc configuration and better handling of selecting a single Windows time zone when multiple objects with different territories where returned (thanks to @jgkps for reporting)
     1.0.2 - (2020-09-10) - Improved registry key handling for enabling location services
     1.0.3 - (2020-12-22) - Added support for TLS 1.2 to disable location services once script has completed
+    1.0.4 - (2022-01-28) - Fixed an issue with latest merge from JankeSkanke that messed up brackets rendering the script unsuable
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -144,11 +145,11 @@ Process {
             [parameter(Mandatory=$true)]
             [ValidateNotNullOrEmpty()]
             [string]$Path,
-    
+
             [parameter(Mandatory=$true)]
             [ValidateNotNullOrEmpty()]
             [string]$Name,        
-    
+
             [parameter(Mandatory=$true)]
             [ValidateNotNullOrEmpty()]
             [string]$Value,
@@ -194,10 +195,11 @@ Process {
         if ($LocationService.Status -notlike "Running") {
             Write-LogEntry -Value "Location service is not running, attempting to start service" -Severity 1
             Start-Service -Name "lfsvc"
-        } elseif {
-	    Write-LogEntry -Value "Applying new configuration, attempting to restart service" -Severity 1
-            ReStart-Service -Name "lfsvc"
-	}
+        }
+        elseif ($LocationService.Status -like "Running") {
+            Write-LogEntry -Value "Location service is already running, restart service to apply new configuration" -Severity 1
+            Restart-Service -Name "lfsvc"
+        }
     }
 
     function Disable-LocationServices {
@@ -286,7 +288,7 @@ Process {
     }
     catch [System.Exception] {
         Write-LogEntry -Value "Failed to load required 'System.Device' assembly, breaking operation" -Severity 3
-    }
+    }    
 }
 End {
     # Set Location Services to disabled to let other policy configuration manage the state
