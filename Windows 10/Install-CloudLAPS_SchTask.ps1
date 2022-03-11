@@ -593,7 +593,7 @@ Function Install-CloudLAPSClient {
         $Task_Trigger = New-ScheduledTaskTrigger -Daily -At 9AM -RandomDelay (New-TimeSpan -Hours 1)
         $Task_Principal = New-ScheduledTaskPrincipal -UserID "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
         $Task_Settings = New-ScheduledTaskSettingsSet -Compatibility Win8 -AllowStartIfOnBatteries -StartWhenAvailable
-        $Task_Action = New-ScheduledTaskAction -Execute "C:\WINDOWS\system32\WindowsPowerShell\v1.0\PowerShell.exe" -Argument "-NoProfile -WindowStyle Hidden -file ""$($CloudLAPSClientScriptPath)"""
+        $Task_Action = New-ScheduledTaskAction -Execute "C:\WINDOWS\system32\WindowsPowerShell\v1.0\PowerShell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -file ""$($CloudLAPSClientScriptPath)"""
         $New_Task = New-ScheduledTask -Description "CloudLAPS Rotation" -Action $Task_Action -Principal $Task_Principal -Trigger $Task_Trigger -Settings $Task_Settings
         Register-ScheduledTask -TaskName "CloudLAPS Rotation" -InputObject $New_Task -Force
         Start-ScheduledTask -TaskName "CloudLAPS Rotation"
