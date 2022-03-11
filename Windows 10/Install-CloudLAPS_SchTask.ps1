@@ -555,7 +555,7 @@ Function Install-CloudLAPSClient {
 
         }
         Catch {
-            Write-Error "Failed to Create Directory. Error message: $($PSItem.Exception.Message)"; 
+            Write-Error "Failed to Create Directory. Error message: $($PSItem.Exception.Message)"
             $ExitCode = 1
         }
     }
@@ -566,7 +566,7 @@ Function Install-CloudLAPSClient {
         Set-Acl -AclObject $ACL -Path $CloudLAPSClientPath
     }
     Catch {
-        Write-Error "Failed to Set ACL on Cloud LAPS Client Path . Error message: $($PSItem.Exception.Message)"; 
+        Write-Error "Failed to Set ACL on Cloud LAPS Client Path . Error message: $($PSItem.Exception.Message)"
         $ExitCode = 1
     }
 
@@ -584,7 +584,7 @@ Function Install-CloudLAPSClient {
         Set-Acl -AclObject $ACL2 -Path $CloudLAPSClientScriptPath
     }
     Catch {
-        Write-Error "Failed to Set ACL on Cloud LAPS Client Script. Error message: $($PSItem.Exception.Message)"; 
+        Write-Error "Failed to Set ACL on Cloud LAPS Client Script. Error message: $($PSItem.Exception.Message)"
         $ExitCode = 1
     }
 
@@ -592,14 +592,14 @@ Function Install-CloudLAPSClient {
     Try {
         $Task_Trigger = New-ScheduledTaskTrigger -Daily -At 9AM -RandomDelay (New-TimeSpan -Hours 1)
         $Task_Principal = New-ScheduledTaskPrincipal -UserID "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-        $Task_Settings = New-ScheduledTaskSettingsSet -Compatibility Win8 -AllowStartIfOnBatteries
+        $Task_Settings = New-ScheduledTaskSettingsSet -Compatibility Win8 -AllowStartIfOnBatteries -StartWhenAvailable
         $Task_Action = New-ScheduledTaskAction -Execute "C:\WINDOWS\system32\WindowsPowerShell\v1.0\PowerShell.exe" -Argument "-NoProfile -WindowStyle Hidden -file ""$($CloudLAPSClientScriptPath)"""
         $New_Task = New-ScheduledTask -Description "CloudLAPS Rotation" -Action $Task_Action -Principal $Task_Principal -Trigger $Task_Trigger -Settings $Task_Settings
         Register-ScheduledTask -TaskName "CloudLAPS Rotation" -InputObject $New_Task -Force
         Start-ScheduledTask -TaskName "CloudLAPS Rotation"
     }
     Catch {
-        Write-Error "Failed to setup Scheduled Task. Error message: $($PSItem.Exception.Message)"; 
+        Write-Error "Failed to setup Scheduled Task. Error message: $($PSItem.Exception.Message)"
         $ExitCode = 1
     }
 
