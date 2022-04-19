@@ -23,7 +23,8 @@ $ScriptBlock = {
     1.0.2 - (2022-01-01) Updated virtual machine array with 'Google Compute Engine'
     1.1.0 - (2022-01-08) Added support for new SendClientEvent function to send client events related to passwor rotation
     1.1.1 - (2022-01-27) Added validation check to test if device is either AAD joined or Hybrid Azure AD joined
-#>
+    #>
+
     Process {
         # Functions
         Function CreateLog {
@@ -539,6 +540,7 @@ Function Install-CloudLAPSClient {
 
     Version history:
     1.0.0 - (2022-03-11) Script created
+    1.0.1 - (2022-04-19) Added Universal Language support for enumerating "USERS" when modifying the ACL of the script path. Thanks lucafabbri365
 #>
 
     # Initiate exit code variable with default value if not errors are caught
@@ -547,6 +549,7 @@ Function Install-CloudLAPSClient {
     $CloudLAPSClientPath = "C:\ProgramData\CloudLAPS Client"
     $CloudLAPSClientScript = "CLAPS_Client.ps1"
     $CloudLAPSClientScriptPath = Join-Path -Path $CloudLAPSClientPath -ChildPath $CloudLAPSClientScript
+    $BuiltinUsersSid = New-Object System.Security.Principal.SecurityIdentifier -ArgumentList @([System.Security.Principal.WellKnownSidType]::BuiltinUsersSid, $null)
             
     #Create Local Path for Client Script
     If (-not(Test-Path -Path $CloudLAPSClientPath)) {
@@ -579,7 +582,7 @@ Function Install-CloudLAPSClient {
         $ACL2.SetAccessRuleProtection($True, $True)
         Set-Acl -AclObject $ACL2 -Path $CloudLAPSClientScriptPath
         $ACL2 = Get-ACL -Path $CloudLAPSClientScriptPath
-        $ACE_Remove = New-Object system.security.AccessControl.FileSystemAccessRule("Users", "Read", "Allow")
+        $ACE_Remove = New-Object system.security.AccessControl.FileSystemAccessRule($BuiltinUsersSid, "Read", "Allow")
         $ACL2.RemoveAccessRuleAll($ACE_Remove)
         Set-Acl -AclObject $ACL2 -Path $CloudLAPSClientScriptPath
     }
