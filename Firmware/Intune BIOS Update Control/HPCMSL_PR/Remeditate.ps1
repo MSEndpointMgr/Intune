@@ -1,8 +1,9 @@
-#HP HPCMLS Detection Script 
+#HP HPCMLS Remediation Script 
 #Created by: 
 #Jan Ketil Skanke & Maurice Daly 
 #MSEndpointMgr.com 
 #Start-PowerShellSysNative is inspired by @NickolajA's method to install the HPCMLS module 
+#Fixed an issue with version 1.6.5 - added -SkipPublisherCheck as HP has changed their root cert from this version. 
 
 #Start remediate
 #This remediation must run in system context and in 64bit powershell. 
@@ -112,7 +113,7 @@ if ($PackageProvider.Version -ge "2.8.5"){
                 try {
                     # Install HP Client Management Script Library
                     Write-Output -Value "Attempting to install HPCMSL module from repository" 
-                    Update-Module -Name "HPCMSL" -AcceptLicense -Force -ErrorAction Stop -Verbose:$false
+                    Install-Module -Name "HPCMSL" -AcceptLicense -Force -SkipPublisherCheck -ErrorAction Stop -Verbose:$false
                 } 
                 catch [System.Exception] {
                     Write-OutPut -Value "Unable to install HPCMSL module from repository. Error message: $($_.Exception.Message)"; exit 1
