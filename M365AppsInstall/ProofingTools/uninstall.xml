@@ -1,0 +1,9 @@
+<Configuration>
+  <Remove>
+    <Product ID="ProofingTools">
+      <Language ID="en-us" />
+    </Product>
+  </Remove>
+  <Display Level="None" AcceptEULA="TRUE" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+</Configuration>
