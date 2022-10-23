@@ -1,9 +1,0 @@
-<Configuration>
-  <Add Version="MatchInstalled">
-    <Product ID="ProofingTools">
-      <Language ID="en-us" />
-    </Product>
-  </Add>
-  <Display Level="None" AcceptEULA="TRUE" />
-  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
-</Configuration>
