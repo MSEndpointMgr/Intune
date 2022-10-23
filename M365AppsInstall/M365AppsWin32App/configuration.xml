@@ -1,0 +1,19 @@
+<Configuration ID="9aa11e20-2e29-451a-b0ba-f1ae3e89d18d">
+  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE">
+    <Product ID="O365ProPlusRetail">
+      <Language ID="en-us" />
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="Lync" />
+      <ExcludeApp ID="Bing" />
+    </Product>
+  </Add>
+  <Property Name="SharedComputerLicensing" Value="0" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+  <Property Name="DeviceBasedLicensing" Value="0" />
+  <Property Name="SCLCacheOverride" Value="0" />
+  <Updates Enabled="TRUE" />
+  <AppSettings>
+    <Setup Name="Company" Value="Company Name" />
+  </AppSettings>
+  <Display Level="None" AcceptEULA="FALSE" />
+</Configuration>

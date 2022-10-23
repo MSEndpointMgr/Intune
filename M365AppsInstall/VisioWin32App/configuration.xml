@@ -1,0 +1,15 @@
+<Configuration ID="6ed98ec6-3582-4cb3-9e21-280a1c156064">
+  <Add OfficeClientEdition="64" Version="MatchInstalled">
+    <Product ID="VisioProRetail">
+      <Language ID="MatchInstalled" Fallback="en-us" TargetProduct="O365ProPlusRetail"/>
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="OneDrive" />
+    </Product>
+  </Add>
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+  <Updates Enabled="TRUE" />
+  <AppSettings>
+    <Setup Name="Company" Value="Company Name" />
+  </AppSettings>
+  <Display Level="None" AcceptEULA="TRUE" />
+</Configuration>
