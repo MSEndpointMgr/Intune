@@ -1,4 +1,4 @@
-# M365 Apps install using Office Deployment Toolkit 
+# M365 Apps Intune scripted dynamic install using Office Deployment Toolkit 
 ## This solution covers installation of the following products 
 * [M365 Apps(Office)](#Main-Office-Package)
 * [Project](#Project-and-Visio)
