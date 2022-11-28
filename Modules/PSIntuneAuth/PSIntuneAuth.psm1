@@ -166,7 +166,7 @@ function Get-MSIntuneAuthToken {
                 # Check if multiple modules exist and determine the module path for the most current version
                 if (($AzureADModules | Measure-Object).Count -gt 1) {
                     $LatestAzureADModule = ($AzureADModules | Select-Object -Property Version | Sort-Object)[-1]
-                    $AzureADModulePath = $AzureADModules | Where-Object { $_.Version -like $LatestAzureADModule.Version } | Select-Object -ExpandProperty ModuleBase
+                    $AzureADModulePath = $AzureADModules | Where-Object { $_.Version -like $LatestAzureADModule.Version } | Select-Object -First 1 -ExpandProperty ModuleBase
                 }
                 else {
                     $AzureADModulePath = $AzureADModules | Select-Object -ExpandProperty ModuleBase
