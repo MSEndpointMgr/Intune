@@ -206,7 +206,7 @@ function Get-MSIntuneAuthToken {
                                 "AuthPrompt" {
                                     # Acquire access token
                                     Write-Verbose -Message "Attempting to acquire access token using user delegation"
-                                    $AuthenticationResult = ($AuthenticationContext.AcquireTokenAsync($Resource, $ClientID, $RedirectUri, $PlatformParams)).Result
+                                    $AuthenticationResult = ($AuthenticationContext.AcquireTokenAsync($Resource, $ClientID, $RedirectUri, $PlatformParams)).Status
                                 }
                                 "AuthCredential" {
                                     # Construct required identity model user password credential
@@ -222,7 +222,7 @@ function Get-MSIntuneAuthToken {
                                     $ClientCredential = New-Object -TypeName "Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential" -ArgumentList ($ClientID, $ClientSecret) -ErrorAction Stop
 
                                     # Acquire access token
-                                    $AuthenticationResult = ($AuthenticationContext.AcquireTokenAsync($Resource, $ClientCredential)).Result
+                                    $AuthenticationResult = ($AuthenticationContext.AcquireTokenAsync($Resource, $ClientCredential)).Status
                                 }
                             }
                             
