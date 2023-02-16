@@ -56,8 +56,11 @@
 .PARAMETER ScopeTagName
     Specify the name of an existing Scope Tag that will be assigned to all specified profile types per platform.
 
-.PARAMETER Pattern
-    Specify a string pattern to match for the name or displayName property of each profile type, to restrict adding a Scope Tag only to the matching profiles.
+.PARAMETER Include
+    Specify a string pattern to match for the name or displayName property of each profile type, to include only the the matching profiles when adding a Scope Tag.
+
+.PARAMETER Exclude
+    Specify a string pattern to match for the name or displayName property of each profile type, to exclude adding a Scope Tag to the matching profiles.
 
 .PARAMETER Method
     Specify 'Add' to append the specific Scope Tag, 'Replace' to replace all existing Scope Tags with the specific Scope Tag or 'Remove' to remove the specific Scope Tag.
@@ -76,25 +79,28 @@
     .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'NewYork'
 
     # Add a scope tag named 'NewYork' to all Windows configuration profile types where the display name matches the 'NY' pattern:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'NewYork' -Pattern 'NY'
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'NewYork' -Include 'NY'
 
     # Add a scope tag named 'NewYork' to all Windows and macOS configuration profile types where the display name matches the 'NY' pattern:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows', 'macOS' -ScopeTagName 'NewYork' -Pattern 'NY'
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows', 'macOS' -ScopeTagName 'NewYork' -Include 'NY'
+
+    # Add a scope tag named 'NewYork' to all Windows and macOS configuration profile types where the display name matches the 'NY' pattern and excludes any profiles matching 'LDN':
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows', 'macOS' -ScopeTagName 'NewYork' -Include 'NY' -Exclude 'LDN'
 
     # Add a scope tag named 'NewYork' to all Linux configuration profile types where the display name matches the 'NY' pattern, but validate the alterations before hand using -WhatIf:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Linux' -ScopeTagName 'NewYork' -Pattern 'NY' -WhatIf
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Linux' -ScopeTagName 'NewYork' -Include 'NY' -WhatIf
 
     # Add a scope tag named 'NewYork' to only the first 3 Windows configuration profile types where the display name matches the 'NY' pattern:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'NewYork' -Pattern 'NY' -First 3
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'NewYork' -Include 'NY' -First 3
 
     # Remove a scope tag named 'London' from all iOS configuration profile types:
     .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'iOS' -ScopeTagName 'London' -Method 'Remove'
 
     # Remove a scope tag named 'London' from all iOS configuration profile types where the display name matches the 'LDN' pattern:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'iOS' -ScopeTagName 'London' -Pattern 'LDN' -Method 'Remove'
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'iOS' -ScopeTagName 'London' -Include 'LDN' -Method 'Remove'
 
     # Remove a scope tag named 'London' from only the first 3 iOS configuration profile types where the display name matches the 'LDN' pattern:
-    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'iOS' -ScopeTagName 'London' -Pattern 'LDN' -Method 'Remove' -First 3
+    .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'iOS' -ScopeTagName 'London' -Include 'LDN' -Method 'Remove' -First 3
 
     # Replace all existing scope tags with a scope tag named 'Stockholm' on all Windows configuration profile types:
     .\Set-MSIntuneProfileTypeScopeTag.ps1 -TenantID 'tenant.onmicrosoft.com' -Platform 'Windows' -ScopeTagName 'Stockholm' -Method 'Replace'
@@ -110,10 +116,11 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2022-12-05
-    Updated:     2022-12-05
+    Updated:     2023-02-16
 
     Version history:
     1.0.0 - (2022-12-05) Script created
+    1.0.1 - (2023-02-16) Changed Pattern parameter to be named Include instead and added a new Exclude parameter
 #>
 #Requires -Modules MSGraphRequest
 [CmdletBinding(SupportsShouldProcess)]
@@ -135,9 +142,13 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$ScopeTagName,
 
-    [parameter(Mandatory = $false, HelpMessage = "Specify a string pattern to match for the name or displayName property of each profile type, to restrict adding a Scope Tag only to the matching profiles.")]
+    [parameter(Mandatory = $false, HelpMessage = "Specify a string pattern to match for the name or displayName property of each profile type, to include only the the matching profiles when adding a Scope Tag.")]
     [ValidateNotNullOrEmpty()]
-    [string]$Pattern,
+    [string]$Include,
+
+    [parameter(Mandatory = $false, HelpMessage = "Specify a string pattern to match for the name or displayName property of each profile type, to exclude adding a Scope Tag to the matching profiles.")]
+    [ValidateNotNullOrEmpty()]
+    [string]$Exclude,
 
     [parameter(Mandatory = $false, HelpMessage = "Specify 'Add' to append the specific Scope Tag, 'Replace' to replace all existing Scope Tags with the specific Scope Tag or 'Remove' to remove the specific Scope Tag.")]
     [ValidateNotNullOrEmpty()]
@@ -462,15 +473,26 @@ Process {
                 }
             }
 
-            # Filter list by Pattern parameter input if present
-            if ($PSBoundParameters["Pattern"]) {
-                Write-Verbose -Message "Filtering list of profile types on displayName property using pattern: $($Pattern)"
-                $ProfilesList = $ProfilesList | Where-Object { $PSItem.displayName -match $Pattern }
+            # Filter list by Include parameter input if present
+            if ($PSBoundParameters["Include"]) {
+                Write-Verbose -Message "Applying 'Include' filtering on profile types based on displayName property using pattern: $($Include)"
+                $ProfilesList = $ProfilesList | Where-Object { $PSItem.displayName -match $Include }
+            }
+
+            # Filter list by Exclude parameter input if present
+            if ($PSBoundParameters["Exclude"]) {
+                Write-Verbose -Message "Applying 'Exclude' filtering on profile types based on displayName property using pattern: $($Exclude)"
+                $ProfilesList = $ProfilesList | Where-Object { $PSItem.displayName -notmatch $Exclude }
             }
 
             # Filter list by First parameter input if present
             if ($PSBoundParameters["First"]) {
                 $ProfilesList = $ProfilesList | Select-Object -First $First
+            }
+
+            if (($PSBoundParameters["Include"]) -or ($PSBoundParameters["Exclude"]) -or ($PSBoundParameters["First"])) {
+                # Write output of current list count after filters have been applied
+                Write-Verbose -Message "Filtered ProfileList count: $($ProfilesList.Count)"
             }
 
             # Construct output stream list of profile items that's been amended by the script
