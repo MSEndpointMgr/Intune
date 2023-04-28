@@ -12,7 +12,7 @@
     Specify the service principal, also known as app registration, Client ID (also known as Application ID).
 
 .PARAMETER State
-    Specify either 'Present' or 'NotPresent'.
+    Specify either 'Present' or 'NotPresent'. By default : 'Present'
 
 .EXAMPLE
     # Retrieve a list of Intune managed devices that have a BitLocker recovery key associated on the Azure AD device object:
@@ -21,16 +21,21 @@
     # Retrieve a list of Intune managed devices that doesn't have a BitLocker recovery key associated on the Azure AD device object:
     .\Get-IntuneManagedDeviceBitLockerKeyPresence.ps1 -TenantID "<tenant_id>" -ClientID "<client_id>" -State "NotPresent"
 
+    # Retrieve a list of Intune managed devices that have a BitLocker recovery key associated on the Azure AD device object:
+    .\Get-IntuneManagedDeviceBitLockerKeyPresence.ps1 -TenantID "<tenant_id>" -ClientID "<client_id> -State "Present"
+
 .NOTES
     FileName:    Get-IntuneManagedDeviceBitLockerKeyPresence.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-12-04
-    Updated:     2020-12-04
+    Updated:     2023-04-28
 
     Version history:
     1.0.0 - (2020-12-04) Script created
+    1.1.0 - (2023-04-28) Script Updated
 #>
+
 #Requires -Modules "MSAL.PS"
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -175,11 +180,11 @@ Process {
                     $TokenExpireMins = ([datetime]$Headers["ExpiresOn"] - $UTCDateTime).Minutes
     
                     # Attempt to retrieve a refresh token when token expiration count is less than or equal to 10
-                    if ($TokenExpireMins -le 10) {
-                        Write-Verbose -Message "Existing token found but has expired, requesting a new token"
-                        $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
-                        $Headers = New-AuthenticationHeader -AccessToken $AccessToken
-                    }
+                   # if ($TokenExpireMins -le 10) {
+                   #     Write-Verbose -Message "Existing token found but has expired, requesting a new token"
+                  #      $AccessToken = Get-MsalToken -TenantId $Script:TenantID -ClientId $Script:ClientID -Silent -ForceRefresh
+                   #     $Headers = New-AuthenticationHeader -AccessToken $AccessToken
+                  #  }
     
                     # Construct table of default request parameters
                     $RequestParams = @{
@@ -332,8 +337,7 @@ Process {
         $AuthenticationHeader = New-AuthenticationHeader -AccessToken $AccessToken
         
         # Retrieve all available BitLocker recovery keys, select only desired properties
-        $BitLockerRecoveryKeys = Invoke-MSGraphOperation -Get -APIVersion "Beta" -Resource "bitlocker/recoveryKeys?`$select=id,createdDateTime,deviceId" -Headers $AuthenticationHeader -Verbose:$VerbosePreference
-        
+        $BitLockerRecoveryKeys = Invoke-MSGraphOperation -Get -APIVersion "v1.0" -Resource "informationProtection/bitlocker/recoveryKeys?`$select=id,createdDateTime,deviceId" -Headers $AuthenticationHeader -Verbose:$VerbosePreference
         # Retrieve all managed Windows devices in Intune
         $ManagedDevices = Invoke-MSGraphOperation -Get -APIVersion "v1.0" -Resource "deviceManagement/managedDevices?`$filter=operatingSystem eq 'Windows'&select=azureADDeviceId&`$select=deviceName,id,azureADDeviceId" -Headers $AuthenticationHeader -Verbose:$VerbosePreference
         
@@ -344,6 +348,7 @@ Process {
             }
             "NotPresent" {
                 $ManagedDevices | Where-Object { $PSItem.azureADDeviceId -notin $BitLockerRecoveryKeys.deviceId }
+                Write-Host "There is $ManagedDevices.count devices missing recovery key"
             }
         }
     }
