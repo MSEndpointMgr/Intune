@@ -1,21 +1,21 @@
 <#PSScriptInfo
-.VERSION 1.1.2
+.VERSION 1.2.0
 .GUID 8d3532b3-ff9f-4031-b06f-25fcab76c626
 .AUTHOR NickolajA
 .DESCRIPTION Gather device hash from local machine and automatically upload it to Autopilot
-.COMPANYNAME SCConfigMgr
+.COMPANYNAME MSEndpointMgr.com
 .COPYRIGHT 
 .TAGS Autopilot Windows Intune
 .LICENSEURI 
-.PROJECTURI https://github.com/SCConfigMgr/Intune/blob/master/Autopilot/Upload-WindowsAutopilotDeviceInfo.ps1
+.PROJECTURI https://github.com/MSEndpointMgr/Intune/blob/master/Autopilot/Upload-WindowsAutopilotDeviceInfo.ps1
 .ICONURI 
 .EXTERNALMODULEDEPENDENCIES 
 .REQUIREDSCRIPTS 
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
 #>
-#Requires -Module AzureAD
-#Requires -Module PSIntuneAuth
+#Requires -Module MSAL.PS
+#Requires -Module MSGraphRequest
 <#
 .SYNOPSIS
     Gather device hash from local machine and automatically upload it to Autopilot.
