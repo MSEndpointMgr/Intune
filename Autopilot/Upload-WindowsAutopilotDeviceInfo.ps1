@@ -51,13 +51,14 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-03-21
-    Updated:     2021-03-24
+    Updated:     2023-06-03
     
     Version history:
     1.0.0 - (2019-03-21) Script created.
     1.1.0 - (2019-10-29) Added support for specifying the primary user assigned to the uploaded Autopilot device as well as renaming the OrderIdentifier parameter to GroupTag. Thanks to @Stgrdk for his contributions. Switched from Get-CimSession to Get-WmiObject to get device details from WMI.
     1.1.1 - (2021-03-24) Script now uses the groupTag property instead of the depcreated OrderIdentifier property. Also removed the code section that attempted to perform an Autopilot sync operation
     1.1.2 - (2021-03-24) Corrected a spelling mistake of 'GroupTag' to 'groupTag'
+    1.2.0 - (2023-06-03) Switched from AzureAD and PSIntuneAuth modules to MSAL.PS and MSGraphRequest
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
@@ -78,59 +79,34 @@ param(
     [string]$UserPrincipalName
 )
 Begin {
-    # Determine if the AzureAD module needs to be installed
-    try {
-        Write-Verbose -Message "Attempting to locate AzureAD module"
-        $AzureADModule = Get-InstalledModule -Name AzureAD -ErrorAction Stop -Verbose:$false
-        if ($AzureADModule -ne $null) {
-            Write-Verbose -Message "AzureAD module detected, checking for latest version"
-            $LatestModuleVersion = (Find-Module -Name AzureAD -ErrorAction Stop -Verbose:$false).Version
-            if ($LatestModuleVersion -gt $AzureADModule.Version) {
-                Write-Verbose -Message "Latest version of AzureAD module is not installed, attempting to install: $($LatestModuleVersion.ToString())"
-                $UpdateModuleInvocation = Update-Module -Name AzureAD -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+    # Ensure required modules are installed and running the latest version
+    $Modules = @("MSAL.PS", "MSGraphRequest")
+    foreach ($Module in $Modules) {
+        try {
+            Write-Verbose -Message "Attempting to locate $($Module) module"
+            $ModuleItem = Get-InstalledModule -Name $Module -ErrorAction Stop -Verbose:$false
+            if ($ModuleItem -ne $null) {
+                Write-Verbose -Message "$($Module) module detected, checking for latest version"
+                $LatestModuleItemVersion = (Find-Module -Name $Module -ErrorAction Stop -Verbose:$false).Version
+                if ($LatestModuleItemVersion -gt $ModuleItem.Version) {
+                    Write-Verbose -Message "Latest version of $($Module) module is not installed, attempting to install: $($LatestModuleVersion.ToString())"
+                    $UpdateModuleInvocation = Update-Module -Name $Module -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+                }
             }
         }
-    }
-    catch [System.Exception] {
-        Write-Warning -Message "Unable to detect AzureAD module, attempting to install from PSGallery"
-        try {
-            # Install NuGet package provider
-            $PackageProvider = Install-PackageProvider -Name NuGet -Force -Verbose:$false
-
-            # Install PSIntuneAuth module
-            Install-Module -Name AzureAD -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
-            Write-Verbose -Message "Successfully installed AzureAD"
-        }
         catch [System.Exception] {
-            Write-Warning -Message "An error occurred while attempting to install AzureAD module. Error message: $($_.Exception.Message)" ; break
-        }
-    }    
-
-    # Determine if the PSIntuneAuth module needs to be installed
-    try {
-        Write-Verbose -Message "Attempting to locate PSIntuneAuth module"
-        $PSIntuneAuthModule = Get-InstalledModule -Name PSIntuneAuth -ErrorAction Stop -Verbose:$false
-        if ($PSIntuneAuthModule -ne $null) {
-            Write-Verbose -Message "Authentication module detected, checking for latest version"
-            $LatestModuleVersion = (Find-Module -Name PSIntuneAuth -ErrorAction Stop -Verbose:$false).Version
-            if ($LatestModuleVersion -gt $PSIntuneAuthModule.Version) {
-                Write-Verbose -Message "Latest version of PSIntuneAuth module is not installed, attempting to install: $($LatestModuleVersion.ToString())"
-                $UpdateModuleInvocation = Update-Module -Name PSIntuneAuth -Scope CurrentUser -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+            Write-Warning -Message "Unable to detect MSAL.PS module, attempting to install from PSGallery"
+            try {
+                # Install NuGet package provider
+                $PackageProvider = Install-PackageProvider -Name "NuGet" -Force -Verbose:$false
+    
+                # Install MSAL.PS module
+                Install-Module -Name $Module -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
+                Write-Verbose -Message "Successfully installed $($Module)"
             }
-        }
-    }
-    catch [System.Exception] {
-        Write-Warning -Message "Unable to detect PSIntuneAuth module, attempting to install from PSGallery"
-        try {
-            # Install NuGet package provider
-            $PackageProvider = Install-PackageProvider -Name NuGet -Force -Verbose:$false
-
-            # Install PSIntuneAuth module
-            Install-Module -Name PSIntuneAuth -Scope AllUsers -Force -ErrorAction Stop -Confirm:$false -Verbose:$false
-            Write-Verbose -Message "Successfully installed PSIntuneAuth"
-        }
-        catch [System.Exception] {
-            Write-Warning -Message "An error occurred while attempting to install PSIntuneAuth module. Error message: $($_.Exception.Message)" ; break
+            catch [System.Exception] {
+                Write-Warning -Message "An error occurred while attempting to install $($Module) module. Error message: $($_.Exception.Message)" ; break
+            }
         }
     }
 
@@ -150,7 +126,7 @@ Begin {
     }
     else {
         Write-Verbose -Message "Authentication token does not exist, requesting a new token"
-        $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID
+        $AuthToken = Get-AccessToken -TenantID $TenantName -ClientID $ApplicationID
     }
 }
 Process {
@@ -180,9 +156,7 @@ Process {
     $ProductKey = (Get-WmiObject -Class "SoftwareLicensingService" -Verbose:$false).OA3xOriginalProductKey
 
     # Construct Graph variables
-    $GraphVersion = "beta"
     $GraphResource = "deviceManagement/importedWindowsAutopilotDeviceIdentities"
-    $GraphURI = "https://graph.microsoft.com/$($GraphVersion)/$($GraphResource)"
 
     # Construct hash table for new Autopilot device identity and convert to JSON
     Write-Verbose -Message "Constructing required JSON body based upon parameter input data for device hash upload"
@@ -206,8 +180,7 @@ Process {
     try {
         # Call Graph API and post JSON data for new Autopilot device identity
         Write-Verbose -Message "Attempting to post data for hardware hash upload"
-        $AutopilotDeviceIdentityResponse = Invoke-RestMethod -Uri $GraphURI -Headers $AuthToken -Method Post -Body $AutopilotDeviceIdentityJSON -ContentType "application/json" -ErrorAction Stop -Verbose:$false
-        $AutopilotDeviceIdentityResponse
+        Invoke-MSGraphOperation -Post -APIVersion "Beta" -Resource $GraphResource -Body $AutopilotDeviceIdentityJSON -ErrorAction "Stop"
     }
     catch [System.Exception] {
         # Construct stream reader for reading the response body from API call
@@ -215,6 +188,6 @@ Process {
 
         # Handle response output and error message
         Write-Output -InputObject "Response content:`n$ResponseBody"
-        Write-Warning -Message "Failed to upload hardware hash. Request to $($GraphURI) failed with HTTP Status $($_.Exception.Response.StatusCode) and description: $($_.Exception.Response.StatusDescription)"
+        Write-Warning -Message "Failed to upload hardware hash. Request failed with HTTP Status $($_.Exception.Response.StatusCode) and description: $($_.Exception.Response.StatusDescription)"
     }  
 }
