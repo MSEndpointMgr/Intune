@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.2.0
+.VERSION 1.2.1
 .GUID 8d3532b3-ff9f-4031-b06f-25fcab76c626
 .AUTHOR NickolajA
 .DESCRIPTION Gather device hash from local machine and automatically upload it to Autopilot
@@ -14,8 +14,6 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 .RELEASENOTES
 #>
-#Requires -Module MSAL.PS
-#Requires -Module MSGraphRequest
 <#
 .SYNOPSIS
     Gather device hash from local machine and automatically upload it to Autopilot.
@@ -24,11 +22,14 @@
     This script automatically gathers the device hash, serial number, manufacturer and model and uploads that data into Autopilot.
     Authentication is required within this script and required permissions for creating Autopilot device identities are needed.
 
-.PARAMETER TenantName
+.PARAMETER TenantID
     Specify the tenant name, e.g. tenantname.onmicrosoft.com.
 
-.PARAMETER ApplicationID
-    Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration (d1ddf0e4-d672-4dae-b554-9d5bdfd93547).
+.PARAMETER ClientID
+    Application ID (Client ID) for an Azure AD service principal. Uses by default the 'Microsoft Intune PowerShell' service principal Application ID.
+
+.PARAMETER ClientSecret
+    Application secret (Client Secret) for an Azure AD service principal.
 
 .PARAMETER GroupTag
     Specify the group tag to easier differentiate Autopilot devices, e.g. 'ABCSales'.
@@ -38,20 +39,20 @@
 
 .EXAMPLE
     # Gather device hash from local computer and upload to Autopilot using Intune Graph API's:
-    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com"
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantID "tenant.onmicrosoft.com"
 
     # Gather device hash from local computer and upload to Autopilot using Intune Graph API's with a given group tag as 'AADUserDriven':
-    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com" -GroupTag "AADUserDriven"
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantID "tenant.onmicrosoft.com" -GroupTag "AADUserDriven"
 
     # Gather device hash from local computer and upload to Autopilot using Intune Graph API's with a given group tag as 'AADUserDriven' and 'somone@domain.com' as the assigned user:
-    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantName "tenant.onmicrosoft.com" -GroupTag "AADUserDriven" -UserPrincipalName "someone@domain.com"
+    .\Upload-WindowsAutopilotDeviceInfo.ps1 -TenantID "tenant.onmicrosoft.com" -GroupTag "AADUserDriven" -UserPrincipalName "someone@domain.com"
 
 .NOTES
     FileName:    Upload-WindowsAutopilotDeviceInfo.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-03-21
-    Updated:     2023-06-03
+    Updated:     2023-06-07
     
     Version history:
     1.0.0 - (2019-03-21) Script created.
@@ -59,26 +60,36 @@
     1.1.1 - (2021-03-24) Script now uses the groupTag property instead of the depcreated OrderIdentifier property. Also removed the code section that attempted to perform an Autopilot sync operation
     1.1.2 - (2021-03-24) Corrected a spelling mistake of 'GroupTag' to 'groupTag'
     1.2.0 - (2023-06-03) Switched from AzureAD and PSIntuneAuth modules to MSAL.PS and MSGraphRequest
+    1.2.1 - (2023-06-07) Improved access token retrieval, now supports client credentials flow using ClientID and ClientSecret parameters
 #>
 [CmdletBinding(SupportsShouldProcess=$true)]
 param(
-    [parameter(Mandatory=$true, HelpMessage="Specify the tenant name, e.g. tenantname.onmicrosoft.com.")]
+    [Alias("TenantName")]
+    [parameter(Mandatory = $true, ParameterSetName = "Interactive", HelpMessage = "Specify the tenant name, e.g. tenantname.onmicrosoft.com.")]
     [ValidateNotNullOrEmpty()]
-    [string]$TenantName,
+    [string]$TenantID,
 
-    [parameter(Mandatory=$false, HelpMessage="Specify the Application ID of the app registration in Azure AD. By default, the script will attempt to use well known Microsoft Intune PowerShell app registration (d1ddf0e4-d672-4dae-b554-9d5bdfd93547).")]
+    [Alias("ApplicationID")]
+    [parameter(Mandatory = $false, ParameterSetName = "Interactive", HelpMessage = "Application ID (Client ID) for an Azure AD service principal. Uses by default the 'Microsoft Intune PowerShell' service principal Application ID.")]
     [ValidateNotNullOrEmpty()]
-    [string]$ApplicationID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",
+    [string]$ClientID,
 
-    [parameter(Mandatory=$false, HelpMessage="Specify the group tag to easier differentiate Autopilot devices, e.g. 'ABCSales'.")]
+    [parameter(Mandatory = $false, ParameterSetName = "Interactive", HelpMessage = "Application secret (Client Secret) for an Azure AD service principal.")]
+    [parameter(Mandatory = $true, ParameterSetName = "ClientSecret")]
+    [ValidateNotNullOrEmpty()]
+    [string]$ClientSecret,
+
+    [parameter(Mandatory = $false, ParameterSetName = "Interactive", HelpMessage = "Specify the group tag to easier differentiate Autopilot devices, e.g. 'ABCSales'.")]
     [ValidateNotNullOrEmpty()]
     [string]$GroupTag,
 
-    [parameter(Mandatory=$false, HelpMessage="Specify the primary user principal name, e.g. 'firstname.lastname@domain.com'.")]
+    [parameter(Mandatory = $false, ParameterSetName = "Interactive", HelpMessage = "Specify the primary user principal name, e.g. 'firstname.lastname@domain.com'.")]
     [ValidateNotNullOrEmpty()]
     [string]$UserPrincipalName
 )
 Begin {
+    Write-Verbose -Message "Parameter set name in use: $($PSCmdlet.ParameterSetName)"
+
     # Ensure required modules are installed and running the latest version
     $Modules = @("MSAL.PS", "MSGraphRequest")
     foreach ($Module in $Modules) {
@@ -95,7 +106,7 @@ Begin {
             }
         }
         catch [System.Exception] {
-            Write-Warning -Message "Unable to detect MSAL.PS module, attempting to install from PSGallery"
+            Write-Warning -Message "Unable to detect $($Module) module, attempting to install from PSGallery"
             try {
                 # Install NuGet package provider
                 $PackageProvider = Install-PackageProvider -Name "NuGet" -Force -Verbose:$false
@@ -110,24 +121,53 @@ Begin {
         }
     }
 
-    # Check if token has expired and if, request a new
-    Write-Verbose -Message "Checking for existing authentication token"
-    if ($Global:AuthToken -ne $null) {
-        $UTCDateTime = (Get-Date).ToUniversalTime()
-        $TokenExpireMins = ($Global:AuthToken.ExpiresOn.datetime - $UTCDateTime).Minutes
-        Write-Verbose -Message "Current authentication token expires in (minutes): $($TokenExpireMins)"
-        if ($TokenExpireMins -le 0) {
-            Write-Verbose -Message "Existing token found but has expired, requesting a new token"
-            $Global:AuthToken = Get-MSIntuneAuthToken -TenantName $TenantName -ClientID $ApplicationID
-        }
-        else {
-            Write-Verbose -Message "Existing authentication token has not expired, will not request a new token"
+    # Determine the correct RedirectUri (also known as Reply URL) to use with MSAL.PS
+    if (-not([string]::IsNullOrEmpty($ClientID))) {
+        Write-Verbose -Message "Using custom Azure AD service principal specified with Application ID: $($ClientID)"
+
+        # Adjust RedirectUri parameter input in case non was passed on command line
+        if ([string]::IsNullOrEmpty($RedirectUri)) {
+            switch -Wildcard ($PSVersionTable["PSVersion"]) {
+                "5.*" {
+                    $RedirectUri = "https://login.microsoftonline.com/common/oauth2/nativeclient"
+                }
+                "7.*" {
+                    $RedirectUri = "http://localhost"
+                }
+            }
         }
     }
     else {
-        Write-Verbose -Message "Authentication token does not exist, requesting a new token"
-        $AuthToken = Get-AccessToken -TenantID $TenantName -ClientID $ApplicationID
+        # Define static variables
+        $ClientID = "d1ddf0e4-d672-4dae-b554-9d5bdfd93547"
+        $RedirectUri = "urn:ietf:wg:oauth:2.0:oob"
+
+        Write-Verbose -Message "Using the default 'Microsoft Intune PowerShell' service principal with Application (Client) ID: $($ClientID)"
+        Write-Verbose -Message "Using RedirectUri with value: $($RedirectUri)"
+
+        # Set default error action preference configuration
+        $ErrorActionPreference = "Stop"
     }
+
+    # Construct table with common parameter input for Get-AccessToken function
+    $AccessTokenArguments = @{
+        "TenantId" = $TenantID
+        "ClientId" = $ClientID
+        "RedirectUri" = $RedirectUri
+        "ErrorAction" = "Stop"
+    }
+
+    # Dynamically add parameter input for Get-MsalToken based on parameter set name
+    switch ($PSCmdlet.ParameterSetName) {
+        "ClientSecret" {
+            Write-Verbose "Using clientSecret"
+            $AccessTokenArguments.Add("ClientSecret", $(ConvertTo-SecureString -String $ClientSecret -AsPlainText -Force))
+        }
+    }
+
+    # Retrieve access token
+    Write-Verbose -Message "Retrieving access token"
+    $Global:AccessToken = Get-AccessToken @AccessTokenArguments
 }
 Process {
     # Functions
