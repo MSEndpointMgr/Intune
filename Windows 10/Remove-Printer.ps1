@@ -20,7 +20,9 @@ Try {
     #Remove Printer
     $PrinterExist = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
     if ($PrinterExist) {
+        $PrinterPort = (Get-Printer -Name $PrinterName).PortName
         Remove-Printer -Name $PrinterName -Confirm:$false
+        Remove-PrinterPort -Name $PrinterPort -Confirm:$false
     }
 }
 Catch {
