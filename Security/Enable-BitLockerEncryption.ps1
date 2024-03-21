@@ -16,6 +16,7 @@
 
 .NOTES
     FileName:    Enable-BitLockerEncryption.ps1
+    Source:      https://github.com/MSEndpointMgr/Intune/blob/master/Security/Enable-BitLockerEncryption.ps1
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2019-10-29
@@ -25,6 +26,7 @@
     1.0.0 - (2019-10-29) Script created
     1.0.1 - (2020-01-03) Added functionality to check if TPM chip is owned and take ownership if it's not
     1.0.2 - (2020-01-13) Added functionality to create a schedule task that runs at user logon in case the escrow of the recovery key to AAD device object failed due to device not being registered at the time
+    1.0.3 - (2024-03-21) Changed $SystemTemp to $SystemScripts and pointed it to $env:SystemRoot\Scripts to prevent scheduled task from failing if $env:SystemRoot\Temp is purged
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -362,18 +364,22 @@ Process {
                                 catch [System.Exception] {
                                     Write-LogEntry -Value "An error occurred while attempting to backup recovery password to Azure AD. Error message: $($_.Exception.Message)" -Severity 3
 
-                                    # Copy executing script to system temporary directory
-                                    Write-LogEntry -Value "Attempting to copy executing script to system temporary directory" -Severity 1
-                                    $SystemTemp = Join-Path -Path $env:SystemRoot -ChildPath "Temp"
-                                    if (-not(Test-Path -Path (Join-Path -Path $SystemTemp -ChildPath "$($MyInvocation.MyCommand.Name)") -PathType Leaf)) {
+                                    # Copy executing script to system scripts directory
+                                    Write-LogEntry -Value "Attempting to copy executing script to system scripts directory" -Severity 1
+                                    $SystemScripts = Join-Path -Path $env:SystemRoot -ChildPath "Scripts"
+                                    if (-not (Test-Path -Path $SystemScripts -PathType Container)) {
+                                        Write-LogEntry -Value "Creating directory: '$SystemScripts'" -Severity 1
+					New-Item -Path $SystemScripts -ItemType Directory -ErrorAction Stop
+                                    }
+                                    if (-not(Test-Path -Path (Join-Path -Path $SystemScripts -ChildPath "$($MyInvocation.MyCommand.Name)") -PathType Leaf)) {
                                         try {
                                             # Copy executing script
                                             Write-LogEntry -Value "Copying executing script to staging folder for scheduled task usage" -Severity 1
-                                            Copy-Item $MyInvocation.MyCommand.Definition -Destination $SystemTemp -ErrorAction Stop
+                                            Copy-Item $MyInvocation.MyCommand.Definition -Destination $SystemScripts -ErrorAction Stop
 
                                             try {
                                                 # Create escrow scheduled task to backup recovery password to Azure AD at a later time
-                                                $TaskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -File $($SystemTemp)\$($MyInvocation.MyCommand.Name) -OperationalMode Backup" -ErrorAction Stop
+                                                $TaskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -File $($SystemScripts)\$($MyInvocation.MyCommand.Name) -OperationalMode Backup" -ErrorAction Stop
                                                 $TaskTrigger = New-ScheduledTaskTrigger -AtLogOn -ErrorAction Stop
                                                 $TaskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -Hidden -DontStopIfGoingOnBatteries -Compatibility "Win8" -RunOnlyIfNetworkAvailable -MultipleInstances "IgnoreNew" -ErrorAction Stop
                                                 $TaskPrincipal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType "ServiceAccount" -RunLevel "Highest" -ErrorAction Stop
