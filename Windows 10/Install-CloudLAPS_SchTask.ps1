@@ -209,7 +209,7 @@ $ScriptBlock = {
                         if ($RSAPrivateKey -ne $null) {
                             if ($RSAPrivateKey -is [System.Security.Cryptography.RSACng]) {
                                 # Construct a new SHA256Managed object to be used when computing the hash
-                                $SHA256Managed = New-Object -TypeName "System.Security.Cryptography.SHA256Managed"
+                                $SHA256Managed = [System.Security.Cryptography.SHA256Managed]::Create()
     
                                 # Construct new UTF8 unicode encoding object
                                 $UnicodeEncoding = [System.Text.UnicodeEncoding]::UTF8
