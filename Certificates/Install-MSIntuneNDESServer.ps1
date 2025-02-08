@@ -99,20 +99,6 @@ Begin {
         Write-Warning -Message "An error occurred while attempting to locate required Server Authentication certificate matching external NDES FQDN"; break
     }
 
-    # Get Client Authentication certifcate for Intune Certificate Connector
-    try {
-        $ClientAuthenticationCertificate = Get-ChildItem -Path "Cert:\LocalMachine\My" -ErrorAction Stop | Where-Object { ($_.Subject -match $ServerFQDN) -and ($_.Extensions["2.5.29.37"].EnhancedKeyUsages.FriendlyName.Contains("Client Authentication")) }
-        if ($ClientAuthenticationCertificate -eq $null) {
-            Write-Warning -Message "Unable to locate required Client Authentication certificate matching internal NDES server FQDN"; break
-        }
-        else {
-            Write-Verbose -Message "- Successfully located required Client Authentication certificate matching internal NDES server FQDN"
-        }
-    }
-    catch [System.Exception] {
-        Write-Warning -Message "An error occurred while attempting to locate required Client Authentication certificate matching internal NDES server FQDN"; break
-    }
-
     # Completed verbose logging for environment gathering process phase
     Write-Verbose -Message "Completed environment gathering process phase"
 }
@@ -187,35 +173,9 @@ Process {
 
     # Init verbose logging for pre-configuration phase
     Write-Verbose -Message "Initiating pre-configuration phase"
-    
-    # Give computer account read permissions on Client Authentication certificate private key
-    try {
-        Write-Verbose -Message "- Attempting to give the NDES server computer account permissions on the Client Authentication certificate private key"
-        $ClientAuthenticationKeyContainerName = $ClientAuthenticationCertificate.PrivateKey.CspKeyContainerInfo.KeyContainerName
-        $ClientAuthenticationKeyFilePath = Join-Path -Path $env:ProgramData -ChildPath "Microsoft\Crypto\RSA\MachineKeys\$($ClientAuthenticationKeyContainerName)"
-        Write-Verbose -Message "- Retrieving existing access rules for private key container"
-        $ClientAuthenticationACL = Get-Acl -Path $ClientAuthenticationKeyFilePath
 
-        # Check if existing ACL exist matching computer account with read permissions
-        $ServerAccessRule = $ClientAuthenticationACL.Access | Where-Object { ($_.IdentityReference -like $ServerNTAccountName) -and ($_.FileSystemRights -match "Read") }
-        if ($ServerAccessRule -eq $null) {
-            Write-Verbose -Message "- Could not find existing access rule for computer account with read permission on private key, attempting to delegate permissions"
-            $NTAccountUser = New-Object -TypeName System.Security.Principal.NTAccount($ServerNTAccountName) -ErrorAction Stop
-            $FileSystemAccessRule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule($NTAccountUser, "Read", "None", "None", "Allow") -ErrorAction Stop
-            $ClientAuthenticationACL.AddAccessRule($FileSystemAccessRule)
-            Set-Acl -Path $ClientAuthenticationKeyFilePath -AclObject $ClientAuthenticationACL -ErrorAction Stop
-            Write-Verbose -Message "- Successfully delegated the NDES server computer account permissions on the Client Authentication certificate private key"
-        }
-        else {
-            Write-Verbose -Message "- Found an existing access rule for computer account with read permission on private key, will skip configuration"
-        }
-    }
-    catch [System.Exception] {
-        Write-Warning -Message "An error occurred while attempting to give the NDES server computer account permissions on the Client Authentication certificate private key"; break
-    }
-
-    try {
-        # Configure service account SPN for local server
+    # Configure service account SPN for local server
+        try {
         Write-Verbose -Message "- Attempting to configure service princal names for NDES service account: $($NDESServiceAccountName)"
         Write-Verbose -Message "- Configuring service principal name HTTP/$($ServerFQDN) on $($NDESServiceAccountName)"
         $ServerFQDNInvocation = Invoke-Expression -Command "cmd.exe /c setspn.exe -s HTTP/$($ServerFQDN) $($NDESServiceAccountName)" -ErrorAction Stop
