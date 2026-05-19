@@ -2,10 +2,21 @@
 .Synopsis
 Check information on the MDM and EntraID certificate using the associated OIDs.
 
-Created on:   2024-09-16
-Created by:   Ben Whitmore @MSEndpointMgr
-Thanks to:    Bryan Dam @PatchMyPC
+Created on:   19th May 2026
+Created by:   Ben Whitmore
 Filename:     Get-TenantInformation.ps1
+
+Modified:
+  - OID 5.6 identified as Intune Account ID (Microsoft-internal tenant scope),
+    per Rudy Ooms' reverse-engineering of the IME / EPM client code.
+  - GUID decoders refactored to use a single helper that strips the ASN.1
+    OCTET STRING wrapper and hands the 16 bytes to [System.Guid]::new(),
+    which already implements the Windows mixed-endian layout
+    (4 LE + 2 LE + 2 LE + 8 BE). Eliminates per-OID byte-shuffling.
+  - Each OID now exposes both a parsed value and a *Raw hex companion field
+    (previous version overwrote the hex with the parsed value).
+  - Added certificate validity fields: NotBefore, NotAfter, days until expiry
+    for both the leaf certificate and the issuing intermediate.
 
 .Description
 This script performs an extensive check on certificates issued by the MDM Device CA and EntraID, by searching across all user profiles as well as the LocalMachine\My certificate store. It retrieves and validates the certificates associated with MDM and EntraID using their respective OIDs (Object Identifiers).
@@ -18,18 +29,18 @@ The script performs the following tasks:
 2. **Certificate Validation**:
    - For each certificate, the script checks the **issuer** and **validates the certificate chain**. It ensures that the certificate is correctly signed by the expected intermediate and root authorities.
    - It checks if the certificate contains a **private key** and whether the private key is **exportable**.
+   - It records the validity period of the leaf certificate and the issuing intermediate.
 
 3. **OID Processing**:
-   - The script processes the **certificate extensions** to extract specific Object Identifiers (OIDs). It then converts the associated **byte arrays** to **GUIDs** for further validation.
+   - The script processes the **certificate extensions** to extract specific Object Identifiers (OIDs). For GUID-shaped extensions it strips the ASN.1 OCTET STRING wrapper and uses [System.Guid]::new() on the 16-byte payload, which applies the Windows mixed-endian layout (Data1/Data2/Data3 little-endian, Data4 big-endian).
 
 4. **Output**:
    - For each matched certificate, the script outputs:
-     - The **certificate name**, **thumbprint**, **issuer**, and the **trust status** of the certificate chain.
+     - The **certificate name**, **thumbprint**, **issuer**, **validity period**, and the **trust status** of the certificate chain.
+     - The **issuing intermediate certificate subject and validity period**.
      - Whether the certificate contains a **private key** and if it is **exportable**.
      - The **Key Storage Provider (KSP)** name associated with the private key.
-     - The **reassembled GUIDs** from specific OIDs found in the certificate extensions.
-
-This script helps automate the process of verifying certificates from the MDM and EntraID, ensuring that both the certificates and their private keys are valid and properly configured, especially in environments with multiple user profiles.
+     - The **decoded value** and **raw hex** for each known OID extension.
 
 ---------------------------------------------------------------------------------
 LEGAL DISCLAIMER
@@ -60,23 +71,28 @@ A hashtable to define the OIDs for the MDM certificate.
 .PARAMETER entraIDOids
 A hashtable to define the OIDs for the EntraID certificate.
 
+.PARAMETER intuneDeviceManagementIntermediateIssuer
+The issuer of the Intune Device Management certificate. Default is 'CN=Microsoft Intune Device Management Device CA'.
+
+.PARAMETER intuneDeviceManagementOids
+A hashtable to define the OIDs for the Intune Device Management certificate.
+
 .EXAMPLE
 .\Get-TenantInformation.ps1
 #>
 
 [CmdletBinding()]
 param (
-    [ValidateSet('MDM', 'EntraID', 'Both')]
+    [ValidateSet('MDM', 'EntraID', 'IntuneDeviceManagement', 'Both')]
     [string]$CertToCheck = 'Both',
 
     [string]$MDMIntermediateIssuer = 'CN=Microsoft Intune MDM Device CA',
     [string]$MDMRootIssuer = 'CN=Microsoft Intune Root Certification Authority',
     [string]$EntraIDIntermediateIssuer = 'MS-Organization-Access',
 
-    # Hashtable to define OIDs for MDM and EntraID
     [Hashtable]$MDMOIDs = @{
         '1.2.840.113556.5.4'  = 'MDMDeviceID'
-        '1.2.840.113556.5.6'  = 'MDMTenantID'
+        '1.2.840.113556.5.6'  = 'IntuneAccountID'
         '1.2.840.113556.5.14' = 'EntraTenantID'
     },
     [Hashtable]$EntraIDOIDs = @{
@@ -85,142 +101,115 @@ param (
         '1.2.840.113556.1.5.284.5' = 'EntraTenantID'
         '1.2.840.113556.1.5.284.7' = 'EntraJoinType'
         '1.2.840.113556.1.5.284.8' = 'EntraTenantRegion'
+    },
+
+    [string]$IntuneDeviceManagementIntermediateIssuer = 'CN=Microsoft Intune Device Management Device CA',
+
+    [Hashtable]$IntuneDeviceManagementOIDs = @{
+        '1.2.840.113556.5.4'  = 'EntDMID'
+        '1.2.840.113556.5.11' = 'IntuneUserID'
+        '1.2.840.113556.5.14' = 'EntraTenantID'
+        '1.2.840.113556.5.25' = 'IntuneDeviceMgmtID'
     }
 )
 
 $VerbosePreference = 'Continue'
 
-# Function to convert a byte array into a hexadecimal string
 function ConvertToHexString($byteArray) {
     return ($byteArray | ForEach-Object { $_.ToString('x2') }) -join ' '
 }
 
-# Function to convert bitstring to GUID based on OID
+# Strip an ASN.1 OCTET STRING wrapper, if present, and return the inner 16 GUID bytes.
+# Handles three observed shapes:
+#   - 16 bytes : no wrapper (e.g. OID 1.2.840.113556.5.4)
+#   - 18 bytes : short-form wrapper '04 10' + 16 bytes (e.g. OIDs 5.6, 5.14)
+#   - 19 bytes : long-form wrapper  '04 81 10' + 16 bytes (e.g. OIDs 1.5.284.2/3/5)
+function Get-GuidPayloadBytes {
+    param ([byte[]]$RawData)
+
+    switch ($RawData.Length) {
+        16 { return $RawData }
+        18 {
+            if ($RawData[0] -eq 0x04 -and $RawData[1] -eq 0x10) { return $RawData[2..17] }
+            throw "Expected ASN.1 OCTET STRING header '04 10' for 18-byte extension; got $($RawData[0..1] -join ' ')"
+        }
+        19 {
+            if ($RawData[0] -eq 0x04 -and $RawData[1] -eq 0x81 -and $RawData[2] -eq 0x10) { return $RawData[3..18] }
+            throw "Expected ASN.1 OCTET STRING header '04 81 10' for 19-byte extension; got $($RawData[0..2] -join ' ')"
+        }
+        default {
+            throw "Unexpected raw extension length for GUID OID: $($RawData.Length) bytes"
+        }
+    }
+}
+
 function Convert-BitStringToGuid {
     param (
         [byte[]]$bitstring,
         [string]$oid
     )
 
-    # Check if the bitstring is null or empty
     if (-not $bitstring) {
         Write-Verbose "The OID $oid has no value (bitstring is null or empty)."
         return "Null"
     }
 
-    # Convert the byte array to a hexadecimal string
-    $hexString = [System.BitConverter]::ToString($bitstring)
-
-    # Split the string into individual hex pairs
-    $hexArray = $hexString.Split('-')
-
-    # Reorder the array based on the OID
-    $guidArray = @()
+    Write-Verbose "OID = $oid"
+    Write-Verbose "Raw bytes: $([System.BitConverter]::ToString($bitstring))"
 
     switch ($oid) {
-        '1.2.840.113556.5.4' {
-
-            # MDM Device ID (4-byte little-endian, 2-byte little-endian, 2-byte little-endian, rest big-endian)
-            Write-Verbose "OID = MDM Device ID OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = @(
-                $hexArray[3], $hexArray[2], $hexArray[1], $hexArray[0], '-'
-                $hexArray[5], $hexArray[4], '-'
-                $hexArray[7], $hexArray[6], '-'
-                $hexArray[8], $hexArray[9], '-'
-                $hexArray[10..15]
-            )
-            Write-Verbose "Intune MDM Device ID: $($guidArray -join '')"
-        }
-        '1.2.840.113556.5.6' {
-
-            # MDM Tenant ID (4-byte little-endian, 2-byte little-endian, 2-byte little-endian, rest big-endian)
-            Write-Verbose "OID = MDM Tenant ID OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = @(
-                $hexArray[5], $hexArray[4], $hexArray[3], $hexArray[2], '-'
-                $hexArray[7], $hexArray[6], '-'
-                $hexArray[8], $hexArray[9], '-'
-                $hexArray[10..15]
-            )
-            Write-Verbose "Intune Tenant ID: $($guidArray -join '')"
-        }
-        '1.2.840.113556.5.14' {
-
-            # Entra ID Tenant ID (4-byte little-endian, 2-byte little-endian, 2-byte little-endian, rest big-endian)
-            Write-Verbose "OID = Entra Tenant ID OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = @(
-                $hexArray[5], $hexArray[4], $hexArray[3], $hexArray[2], '-'
-                $hexArray[7], $hexArray[6], '-'
-                $hexArray[9], $hexArray[8], '-'
-                $hexArray[10], $hexArray[11], '-'
-                $hexArray[12..17]
-            )
-            Write-Verbose "Entra Tenant ID: $($guidArray -join '')"
-        }
-        { $_ -eq '1.2.840.113556.1.5.284.2' -or $_ -eq '1.2.840.113556.1.5.284.3' } {
-
-            # Entra ID Device ID (4-byte little-endian, 2-byte little-endian, 2-byte little-endian, rest big-endian)
-            Write-Verbose "OID = Entra Device ID OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = @(
-                $hexArray[6], $hexArray[5], $hexArray[4], $hexArray[3], '-'
-                $hexArray[8], $hexArray[7], '-'
-                $hexArray[10], $hexArray[9], '-'
-                $hexArray[11], $hexArray[12], '-'
-                $hexArray[13..18]
-            )
-            Write-Verbose "Entra Device ID: $($guidArray -join '')"
-        }
-        '1.2.840.113556.1.5.284.5' {
-
-            # Entra ID Device ID (4-byte little-endian, 2-byte little-endian, 2-byte little-endian, rest big-endian)
-            Write-Verbose "OID = Entra Tenant ID OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = @(
-                $hexArray[6], $hexArray[5], $hexArray[4], $hexArray[3], '-'
-                $hexArray[8], $hexArray[7], '-'
-                $hexArray[10], $hexArray[9], '-'
-                $hexArray[11], $hexArray[12], '-'
-                $hexArray[13..18]
-            )
-            Write-Verbose "Entra Tenant ID: $($guidArray -join '')"
-        }
         '1.2.840.113556.1.5.284.7' {
 
-            # Join Type (assumed to be a character representing the join type, we don't assemble a GUID here)
-            $joinType = [char]([convert]::toint16($hexArray[3], 16))
-            Write-Verbose "OID = Entra Join Type OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = if ($joinType -eq '0') {
-                Write-Verbose "Entra Registered `(0`)"
-                "Entra Registered `(0`)"
+            # Join Type - single ASCII character at offset 3 (after 04 81 01 wrapper).
+            # 0 = Entra Registered, 1 = Entra Joined
+            $joinType = [char]$bitstring[3]
+            $result = switch ($joinType) {
+                '0'     { "Entra Registered (0)" }
+                '1'     { "Entra Joined (1)" }
+                default { "Unknown ($joinType)" }
             }
-            elseif ($joinType -eq '1') {
-                Write-Verbose "Entra Joined `(1`)"
-                "Entra Joined `(1`)"
-            }
-            else {
-                Write-Verbose "Unknown `($($joinType)`)"
-                "Unknown `($($joinType)`)"
-            }
+            Write-Verbose "Decoded: $result"
+            return $result
         }
         '1.2.840.113556.1.5.284.8' {
 
-            # Tenant Region (assumes two 2-byte little-endian values)
-            Write-Verbose "OID = Entra Tenant Region OID"
-            Write-Verbose "Hex Array: $($hexArray -join '')"
-            $guidArray = [char]([convert]::toint16($hexArray[3], 16)), [char]([convert]::toint16($hexArray[4], 16))
-            Write-Verbose "Entra Tenant Region: $($guidArray -join '')"
+            # Tenant Region - two ASCII characters at offsets 3,4 (after 04 81 02 wrapper)
+            $region = [string]::new([char[]]@($bitstring[3], $bitstring[4]))
+            Write-Verbose "Decoded: $region"
+            return $region
         }
         default {
-            Write-Debug "Unknown OID: $oid"
+
+            # ASN.1 INTEGER (tag 0x02): decode as a small integer value
+            if ($bitstring.Length -ge 3 -and $bitstring[0] -eq 0x02) {
+                try {
+                    $intLength = $bitstring[1]
+                    $intValue = 0
+                    for ($i = 0; $i -lt $intLength; $i++) {
+                        $intValue = ($intValue -shl 8) -bor $bitstring[2 + $i]
+                    }
+                    Write-Verbose "Decoded INTEGER: $intValue"
+                    return $intValue.ToString()
+                }
+                catch {
+                    Write-Verbose "Could not decode as INTEGER: $($_.Exception.Message)"
+                    return "Decode failed: $($_.Exception.Message)"
+                }
+            }
+
+            # GUID-shaped OIDs: strip the ASN.1 wrapper and let .NET parse the 16-byte payload
+            try {
+                $guidBytes = Get-GuidPayloadBytes -RawData $bitstring
+                $guid = [Guid]::new([byte[]]$guidBytes).ToString().ToUpper()
+                Write-Verbose "Decoded GUID: $guid"
+                return $guid
+            }
+            catch {
+                Write-Verbose "Could not decode as GUID: $($_.Exception.Message)"
+                return "Decode failed: $($_.Exception.Message)"
+            }
         }
     }
-
-    # Return the GUID as a string
-    return $guidArray -join ''
 }
 
 # Function to check if the current user is an administrator
@@ -242,7 +231,7 @@ function Get-PrivateKeyInfo {
         # Test if the private key is exportable
         try {
             if ($cert) {
-                
+
                 # Test exportability for the certificate object
                 $certBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pkcs12, $null)
                 $isExportable = $true
@@ -333,9 +322,11 @@ function Get-CertificateInformation {
         [string]$MDMIntermediateIssuer,
         [string]$MDMRootIssuer,
         [string]$EntraIDIntermediateIssuer,
+        [string]$IntuneDeviceManagementIntermediateIssuer,
         [string]$CertToCheck,
         [Hashtable]$MDMOIDs,
-        [Hashtable]$EntraIDOIDs
+        [Hashtable]$EntraIDOIDs,
+        [Hashtable]$IntuneDeviceManagementOIDs
     )
 
     $certResults = @()
@@ -366,6 +357,14 @@ function Get-CertificateInformation {
                     $certObject = Invoke-CertificateProcessing -cert $cert -MDMIntermediateIssuerCN $MDMIntermediateIssuer -MDMRootIssuer $MDMRootIssuer -CertificateTest "MDM" -OidList $MDMOIDs -CertificateLocation "LocalMachine\My"
                     $certResults += $certObject
                 }
+
+                # Process Intune Device Management Certificate third
+                if ($cert.Issuer.Contains($IntuneDeviceManagementIntermediateIssuer)) {
+                    Write-Verbose "`nFound Intune Device Management Certificate in the LocalMachine\My store"
+                    Write-Verbose "Processing Intune Device Management Certificate"
+                    $certObject = Invoke-CertificateProcessing -cert $cert -IntuneDeviceManagementIntermediateIssuerCN $IntuneDeviceManagementIntermediateIssuer -MDMRootIssuer $MDMRootIssuer -CertificateTest "IntuneDeviceManagement" -OidList $IntuneDeviceManagementOIDs -CertificateLocation "LocalMachine\My"
+                    $certResults += $certObject
+                }
             }
             'MDM' {
 
@@ -387,6 +386,16 @@ function Get-CertificateInformation {
                     $certResults += $certObject
                 }
             }
+            'IntuneDeviceManagement' {
+
+                # Process Intune Device Management Certificate
+                if ($cert.Issuer.Contains($IntuneDeviceManagementIntermediateIssuer)) {
+                    Write-Verbose "`nFound Intune Device Management Certificate in the LocalMachine\My store"
+                    Write-Verbose "Processing Intune Device Management Certificate"
+                    $certObject = Invoke-CertificateProcessing -cert $cert -IntuneDeviceManagementIntermediateIssuerCN $IntuneDeviceManagementIntermediateIssuer -MDMRootIssuer $MDMRootIssuer -CertificateTest "IntuneDeviceManagement" -OidList $IntuneDeviceManagementOIDs -CertificateLocation "LocalMachine\My"
+                    $certResults += $certObject
+                }
+            }
         }
     }
     $localMachineStore.Close()
@@ -404,7 +413,7 @@ function Get-CertificateInformation {
         # Add user profile paths to the certPaths hashtable
         foreach ($userProfile in $userProfiles) {
             $certificatePath = Join-Path -Path $userProfile.LocalPath -ChildPath 'AppData\Roaming\Microsoft\SystemCertificates\My\Certificates'
-    
+
             # Add the user profile path to the certPaths hashtable
             $certPaths["$certificatePath"] = $certificatePath
         }
@@ -442,6 +451,14 @@ function Get-CertificateInformation {
                                     $certObject = Invoke-CertificateProcessing -cert $cert -expectedMDMIntermediateIssuerCN $MDMIntermediateIssuer -expectedMDMRootIssuer $MDMRootIssuer -CertificateTest "MDM" -CertificateType "File" -OidList $MDMOIDs -CertificateLocation $profileName
                                     $certResults += $certObject
                                 }
+
+                                # Process Intune Device Management Certificate third
+                                if ($cert.Issuer.Contains($IntuneDeviceManagementIntermediateIssuer)) {
+                                    Write-Verbose "`nProcessing Intune Device Management Certificate"
+                                    Write-Verbose "`nFound Intune Device Management Certificate in the $profileName store"
+                                    $certObject = Invoke-CertificateProcessing -cert $cert -IntuneDeviceManagementIntermediateIssuerCN $IntuneDeviceManagementIntermediateIssuer -MDMRootIssuer $MDMRootIssuer -CertificateTest "IntuneDeviceManagement" -CertificateType "File" -OidList $IntuneDeviceManagementOIDs -CertificateLocation $profileName
+                                    $certResults += $certObject
+                                }
                             }
                             'MDM' {
 
@@ -460,6 +477,16 @@ function Get-CertificateInformation {
                                     Write-Verbose "`nProcessing EntraID Certificate"
                                     Write-Verbose "`nFound EntraID Certificate in the $profileName store"
                                     $certObject = Invoke-CertificateProcessing -cert $cert -EntraIDIntermediateIssuerCN $EntraIDIntermediateIssuer -CertificateTest "EntraID" -CertificateType "File" -OidList $EntraIDOIDs -CertificateLocation $profileName
+                                    $certResults += $certObject
+                                }
+                            }
+                            'IntuneDeviceManagement' {
+
+                                # Process Intune Device Management Certificate
+                                if ($cert.Issuer.Contains($IntuneDeviceManagementIntermediateIssuer)) {
+                                    Write-Verbose "`nProcessing Intune Device Management Certificate"
+                                    Write-Verbose "`nFound Intune Device Management Certificate in the $profileName store"
+                                    $certObject = Invoke-CertificateProcessing -cert $cert -IntuneDeviceManagementIntermediateIssuerCN $IntuneDeviceManagementIntermediateIssuer -MDMRootIssuer $MDMRootIssuer -CertificateTest "IntuneDeviceManagement" -CertificateType "File" -OidList $IntuneDeviceManagementOIDs -CertificateLocation $profileName
                                     $certResults += $certObject
                                 }
                             }
@@ -555,6 +582,7 @@ function Invoke-CertificateProcessing {
         [string]$MDMIntermediateIssuerCN,
         [string]$MDMRootIssuer,
         [string]$EntraIDIntermediateIssuerCN,
+        [string]$IntuneDeviceManagementIntermediateIssuerCN,
         [string]$CertificateLocation,
         [string]$CertificateTest,
         [hashtable]$OidList,
@@ -571,6 +599,12 @@ function Invoke-CertificateProcessing {
         CertificateIssuer     = $cert.Issuer
     }
 
+    # Validity window of the leaf certificate
+    $now = Get-Date
+    $properties["CertNotBefore"]       = $cert.NotBefore
+    $properties["CertNotAfter"]        = $cert.NotAfter
+    $properties["CertDaysUntilExpiry"] = [int]($cert.NotAfter - $now).TotalDays
+
     # Initialize a chain object and build the certificate chain
     $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
     $chain.Build($cert) | Out-Null
@@ -581,9 +615,22 @@ function Invoke-CertificateProcessing {
     if ($chain.ChainElements.Count -gt 1) {
         $certChainPresent = $true
         Write-Verbose "Certificate chain found on the device."
+
+        # Record the issuing intermediate (chain element [1]) details
+        $intermediate = $chain.ChainElements[1].Certificate
+        $properties["IssuerCertSubject"]           = $intermediate.Subject
+        $properties["IssuerCertThumbprint"]        = $intermediate.Thumbprint
+        $properties["IssuerCertNotBefore"]         = $intermediate.NotBefore
+        $properties["IssuerCertNotAfter"]          = $intermediate.NotAfter
+        $properties["IssuerCertDaysUntilExpiry"]   = [int]($intermediate.NotAfter - $now).TotalDays
     }
     else {
         Write-Verbose "Certificate chain not fully present on the device."
+        $properties["IssuerCertSubject"]           = $null
+        $properties["IssuerCertThumbprint"]        = $null
+        $properties["IssuerCertNotBefore"]         = $null
+        $properties["IssuerCertNotAfter"]          = $null
+        $properties["IssuerCertDaysUntilExpiry"]   = $null
     }
 
     $properties["CertChainPresent"] = $certChainPresent
@@ -613,6 +660,18 @@ function Invoke-CertificateProcessing {
             Write-Verbose "EntraID certificate chain validation failed."
         }
     }
+    elseif ($CertificateTest -eq 'IntuneDeviceManagement') {
+        Write-Verbose "Validating Intune Device Management certificate chain."
+        $chainValid = Test-CertificateIssuer -cert $cert -expectedIntermediateIssuer $IntuneDeviceManagementIntermediateIssuerCN -expectedRootIssuer $MDMRootIssuer
+        if ($chainValid) {
+            $properties["CertChainValidated"] = $true
+            Write-Verbose "Intune Device Management certificate chain validated successfully."
+        }
+        else {
+            $properties["CertChainValidated"] = $false
+            Write-Verbose "Intune Device Management certificate chain validation failed."
+        }
+    }
 
         # Determine if the cert is from LocalMachine or UserProfile, and call Get-PrivateKeyInfo accordingly
         $certFilePath = $null
@@ -640,15 +699,14 @@ function Invoke-CertificateProcessing {
         $properties["KeyStorageProvider"] = $false
     }
 
-    # Process OIDs based on the certificate type and OID list passed in
+    # Process OIDs based on the certificate type and OID list passed in.
     foreach ($extension in $cert.Extensions) {
         if ($OidList.ContainsKey($extension.Oid.Value)) {
             Write-Verbose "Processing OID: $($extension.Oid.Value)"
             $oidName = $OidList[$extension.Oid.Value]
 
-            # Convert RawData to Hex String and reassemble if necessary
-            $properties[$oidName] = ConvertToHexString $extension.RawData
-            $properties["${oidName}"] = Convert-BitStringToGuid -bitstring $extension.RawData -oid $extension.Oid.Value
+            $properties[$oidName]        = Convert-BitStringToGuid -bitstring $extension.RawData -oid $extension.Oid.Value
+            # $properties["${oidName}Raw"] = ConvertToHexString $extension.RawData
         }
     }
 
@@ -660,6 +718,8 @@ Get-CertificateInformation `
     -MDMIntermediateIssuer $MDMIntermediateIssuer `
     -MDMRootIssuer $MDMRootIssuer `
     -EntraIDIntermediateIssuer $EntraIDIntermediateIssuer `
+    -IntuneDeviceManagementIntermediateIssuer $IntuneDeviceManagementIntermediateIssuer `
     -CertToCheck $CertToCheck `
     -MDMOIDs $MDMOIDs `
-    -EntraIDOIDs $EntraIDOIDs
+    -EntraIDOIDs $EntraIDOIDs `
+    -IntuneDeviceManagementOIDs $IntuneDeviceManagementOIDs
