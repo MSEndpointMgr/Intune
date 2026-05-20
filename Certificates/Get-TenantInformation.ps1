@@ -6,18 +6,6 @@ Created on:   19th May 2026
 Created by:   Ben Whitmore
 Filename:     Get-TenantInformation.ps1
 
-Modified:
-  - OID 5.6 identified as Intune Account ID (Microsoft-internal tenant scope),
-    per Rudy Ooms' reverse-engineering of the IME / EPM client code.
-  - GUID decoders refactored to use a single helper that strips the ASN.1
-    OCTET STRING wrapper and hands the 16 bytes to [System.Guid]::new(),
-    which already implements the Windows mixed-endian layout
-    (4 LE + 2 LE + 2 LE + 8 BE). Eliminates per-OID byte-shuffling.
-  - Each OID now exposes both a parsed value and a *Raw hex companion field
-    (previous version overwrote the hex with the parsed value).
-  - Added certificate validity fields: NotBefore, NotAfter, days until expiry
-    for both the leaf certificate and the issuing intermediate.
-
 .Description
 This script performs an extensive check on certificates issued by the MDM Device CA and EntraID, by searching across all user profiles as well as the LocalMachine\My certificate store. It retrieves and validates the certificates associated with MDM and EntraID using their respective OIDs (Object Identifiers).
 
