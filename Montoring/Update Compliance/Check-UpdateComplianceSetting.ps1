@@ -142,14 +142,17 @@ $global:ConnectivityEndpoint = @(
     "login.live.com"
 )
 
+#Operating system
+$os = Get-WmiObject Win32_OperatingSystem
+
 #OS Version
-$global:osVersion = (Get-WmiObject Win32_OperatingSystem).Version
+$global:osVersion = $os.Version
 
 #OS Build Number
-[int] $global:osBuildNumber = (Get-WmiObject Win32_OperatingSystem).BuildNumber
+[int] $global:osBuildNumber = $os.BuildNumber
 
 #OS Name
-$global:operatingSystemName = (Get-WmiObject Win32_OperatingSystem).Name
+$global:operatingSystemName = $os.Name
 
 #Output Arrays
 $Global:ScriptOut = $Null
@@ -262,15 +265,15 @@ function CheckCommercialID {
         $commercialIDValue1 = (Get-ItemProperty -Path "HKLM:SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "CommercialID" -ErrorAction SilentlyContinue).CommercialID 
         $commercialIDValue2 = (Get-ItemProperty -Path "HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" -Name "CommercialID" -ErrorAction SilentlyContinue).CommercialID 
         
-        If (($commercialIDValue1 -eq $null) -or ($commercialIDValue1 -eq [string]::Empty)) {
+        if ([string]::IsNullOrWhitespace($commercialIDValue1)) {
             Write-Array -Status "Info" -Test "CheckCommercialIDValue1" -Result "CommercialID value is empty"
             $commercialIDValue1ResultFail = $true
         } 
-        If (([guid]::TryParse($commercialIDValue1, $([ref][guid]::Empty)) -eq $true)) {
+        If ([guid]::TryParse($commercialIDValue1, $([ref][guid]::Empty)) -eq $true) {
             Write-Array -Status "Passed" -Test "CheckCommercialIDValue1" -Result "Valid GUID found in registry key value"
         }
 
-        If (($commercialIDValue2 -eq $null) -or ($commercialIDValue2 -eq [string]::Empty)) {
+        if ([string]::IsNullOrWhitespace($commercialIDValue2)) {
             Write-Array -Status "Info" -Test "CheckCommercialIDValue2" -Result "CommercialID value is empty"
             $commercialIDValue2ResultFail = $true
         }
@@ -289,7 +292,7 @@ function CheckCommercialID {
                 Write-Array -Status "Passed" -Test "CheckCommercialIDOverallStatus" -Result "CommercialID registry key value 2 is valid"
             }
             If (-not ($commercialIDValue2ResultFail) -and (-not($commercialIDValue1ResultFail))) {
-                Write-Array -Status "Passed" -Test "CheckCommercialIDOverallStatus" -Result "CommercialID registry key value 2 is valid"
+                Write-Array -Status "Passed" -Test "CheckCommercialIDOverallStatus" -Result "CommercialID registry key value 1 and value 2 is valid"
             }
         }
     }
@@ -301,7 +304,7 @@ function CheckCommercialID {
 function CheckSqmID {
     Try {
         $SQMID = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\SQMClient" -Name MachineId).MachineId
-        if (($SQMID -eq $null) -or ($SQMID -eq [string]::Empty)) {
+        if ([string]::IsNullOrWhitespace($SQMID)) {
             Write-Array -Status "Failed" -Test "CheckSqmID" -Result "SQMID Not found"
         }
         else {
@@ -327,7 +330,7 @@ function CheckTelemetryOptIn {
         $allowTelemetryProperty2 = (Get-ItemProperty -Path $vAllowTelemetryPath2 -Name AllowTelemetry -ErrorAction SilentlyContinue).AllowTelemetry
         $allowTelemetryProperty3 = (Get-ItemProperty -Path $vAllowTelemetryPath1 -Name AllowTelemetry_PolicyManager -ErrorAction SilentlyContinue).AllowTelemetry_PolicyManager
         
-        if (($allowTelemetryProperty1 -ne $null) -or ($allowTelemetryProperty1 -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($allowTelemetryProperty1)) {
 
             if ($allowTelemetryProperty1 -isnot [Int32]) {
                 Write-Array -Status "Info" -Test "CheckTelemetryOptIn1" -Result "Invalid value for AllowTelemetry" 
@@ -346,7 +349,7 @@ function CheckTelemetryOptIn {
             $vAllowTelemetryPath1ResultFail = $true
         }
 
-        if (($allowTelemetryProperty2 -ne $null) -or ($allowTelemetryProperty2 -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($allowTelemetryProperty2)) {
 
             if ($allowTelemetryProperty2 -isnot [Int32]) {
                 Write-Array -Status "Info" -Test "CheckTelemetryOptIn2" -Result "Invalid value for AllowTelemetry" 
@@ -365,7 +368,7 @@ function CheckTelemetryOptIn {
             $vAllowTelemetryPath2ResultFail = $true
         }
 
-        if (($allowTelemetryProperty3 -ne $null) -or ($allowTelemetryProperty3 -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($allowTelemetryProperty3)) {
 
             if ($allowTelemetryProperty3 -isnot [Int32]) {
                 Write-Array -Status "Info" -Test "CheckTelemetryOptIn3" -Result "Invalid value for AllowTelemetry_PolicyManager" 
@@ -442,15 +445,16 @@ function CheckUtcCsp {
     Try {
         $ClassName = "MDM_Win32CompatibilityAppraiser_UniversalTelemetryClient01"
         $BridgeNamespace = "root\cimv2\mdm\dmmap"
-        $FieldName = "UtcConnectionReport"
-        $CspInstance = get-ciminstance -Namespace $BridgeNamespace -ClassName $ClassName
-        $Data = $CspInstance.$FieldName
-        $XmlData = [xml]$Data
+        $CspInstance = Get-CimInstance -Namespace $BridgeNamespace -ClassName $ClassName
+        [xml]$Data = $CspInstance.UtcConnectionReport
 
-        if (0 -eq $XmlData.ConnectionReport.ConnectionSummary.DataUploaded) {
+        if (-not $Data) {
+            Write-Array -Status "Failed" -Test "CheckUtcCsp" -Result "Could not get WMI info"
+        }
+        elseif ($Data -and 0 -eq $Data.ConnectionReport.ConnectionSummary.DataUploaded) {
             Write-Array -Status "Failed" -Test "CheckUtcCsp" -Result "Recent data uploads failed"
         }
-        else {
+        elseif ($Data -and 0 -ne $Data.ConnectionReport.ConnectionSummary.DataUploaded) {
             Write-Array -Status "Passed" -Test "CheckUtcCsp" -Result "UTC CSP verified"
         }
     }
@@ -471,8 +475,7 @@ function CheckDiagtrackService {
             [string]$fileRevision = $versionInfo.FilePrivatePart
 
             $diagtrackVersion = $majorPart + $minorPart + $buildPart
-            [string]$dot = "."
-            [string]$diagtrackVersionFormatted = $majorPart + $dot + $minorPart + $dot + $buildPart
+            [string]$diagtrackVersionFormatted = $majorPart + "." + $minorPart + "." + $buildPart
 
             if ([int]$diagtrackVersion -lt 10010586 ) {
                 Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersion)"
@@ -482,26 +485,26 @@ function CheckDiagtrackService {
             if ($global:operatingSystemName.ToLower().Contains("windows 10")) {
                 if ([int]$diagtrackVersion -eq 10014393 -and [int]$fileRevision -lt 2513) {
                     $minRevision = "2513"
-                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
+                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + "." + $minRevision
 
                     Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10015063 -and [int]$fileRevision -lt 1356) {
                     $minRevision = "1356"
-                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
+                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + "." + $minRevision
                     Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10016299 -and [int]$fileRevision -lt 696) {
                     $minRevision = "696"
-                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
+                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + "." + $minRevision
                     Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
 
                 if ([int]$diagtrackVersion -eq 10017134 -and [int]$fileRevision -lt 320) {
                     $minRevision = "320"
-                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + $dot + $minRevision
+                    $diagtrackVersionFormattedFull = $diagtrackVersionFormatted + "." + $minRevision
                     Write-Array -Status "Warning" -Test "CheckDiagtrackDLLVersion" -Result "Unexpected Version $($diagtrackVersionFormattedFull)"
                 }
             }
@@ -530,7 +533,7 @@ function CheckMSAService {
         $serviceStartMode = $serviceInfo.StartMode
         $serviceStatus = $serviceInfo.State
 
-        if ($serviceStartMode.ToString().ToLower() -eq "disabled") {    
+        if ($serviceStartMode.ToString().ToLower() -eq "disabled") {
             Write-Array -Status "Failed" -Test "CheckMSAService" -Result "Service is disabled"
         }
         else {
@@ -558,7 +561,7 @@ function CheckAllowDeviceNameInTelemetry {
         
         $allowDeviceNameProperty = (Get-ItemProperty -Path $vAllowDeviceNamePath -Name AllowDeviceNameInTelemetry -ErrorAction SilentlyContinue).AllowDeviceNameInTelemetry
        
-        if (($allowDeviceNameProperty -ne $null) -or ($allowDeviceNameProperty -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($allowDeviceNameProperty)) {
 
             if ($allowDeviceNameProperty -isnot [Int32]) {
                 Write-Array -Status "Warning" -Test "CheckAllowDeviceName" -Result "Invalid value for AllowDeviceNameInTelemetry"   
@@ -587,7 +590,7 @@ function CheckAllowUpdateComplianceProcessing {
         
         $allowUpdateComplianceProcessingProperty = (Get-ItemProperty -Path $vAllowUpdateComplianceProcessingPath -Name AllowUpdateComplianceProcessing -ErrorAction SilentlyContinue).AllowUpdateComplianceProcessing
        
-        if (($allowUpdateComplianceProcessingProperty -ne $null) -or ($allowUpdateComplianceProcessingProperty -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($allowUpdateComplianceProcessingProperty)) {
 
             if ($allowUpdateComplianceProcessingProperty -isnot [Int32]) {
                 Write-Array -Status "Warning" -Test "CheckAllowUpdateComplianceProcessing" -Result "Invalid value for AllowUpdateComplianceProcessing" 
@@ -615,8 +618,8 @@ function CheckAllowWUfBCloudProcessing {
     Try {
         
         $AllowWUfBCloudProcessingProperty = (Get-ItemProperty -Path $vAllowWUfBCloudProcessingPath -Name AllowWUfBCloudProcessing -ErrorAction SilentlyContinue).AllowWUfBCloudProcessing
-       
-        if (($AllowWUfBCloudProcessingProperty -ne $null) -or ($AllowWUfBCloudProcessingProperty -eq [string]::Empty)) {
+
+        if (-not [string]::IsNullOrWhitespace($AllowWUfBCloudProcessingProperty)) {
 
             if ($AllowWUfBCloudProcessingProperty -isnot [Int32]) {
                 Write-Array -Status "Warning" -Test "CheckAllowWUfBCloudProcessing" -Result "Invalid value for AllowWUfBCloudProcessing"   
@@ -645,7 +648,7 @@ function CheckConfigureTelemetryOptInChangeNotification {
         
         $ConfigureTelemetryOptInChangeNotificationProperty = (Get-ItemProperty -Path $vConfigureTelemetryOptInChangeNotificationPath -Name ConfigureTelemetryOptInChangeNotification -ErrorAction SilentlyContinue).ConfigureTelemetryOptInChangeNotification
        
-        if (($ConfigureTelemetryOptInChangeNotificationProperty -ne $null) -or ($ConfigureTelemetryOptInChangeNotificationProperty -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($ConfigureTelemetryOptInChangeNotificationProperty)) {
 
             if ($ConfigureTelemetryOptInChangeNotificationProperty -isnot [Int32]) {
                 Write-Array -Status "Warning" -Test "CheckConfigureTelemetryOptInChangeNotification" -Result "Invalid value for ConfigureTelemetryOptInChangeNotification"   
@@ -674,7 +677,7 @@ function CheckConfigureTelemetryOptInSettingsUx {
         
         $ConfigureTelemetryOptInChangeNotificationProperty = (Get-ItemProperty -Path $vConfigureTelemetryOptInChangeNotificationPath -Name ConfigureTelemetryOptInSettingsUx -ErrorAction SilentlyContinue).ConfigureTelemetryOptInSettingsUx
        
-        if (($ConfigureTelemetryOptInChangeNotificationProperty -ne $null) -or ($ConfigureTelemetryOptInChangeNotificationProperty -eq [string]::Empty)) {
+        if (-not [string]::IsNullOrWhitespace($ConfigureTelemetryOptInChangeNotificationProperty)) {
 
             if ($ConfigureTelemetryOptInChangeNotificationProperty -isnot [Int32]) {
                 Write-Array -Status "Warning" -Test "CheckConfigureTelemetryOptInSettingsUx" -Result "Invalid value for ConfigureTelemetryOptInSettingsUx"   
