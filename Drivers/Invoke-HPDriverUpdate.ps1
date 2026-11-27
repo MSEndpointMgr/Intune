@@ -20,13 +20,14 @@
     Author:      Nickolaj Andersen
     Contact:     @NickolajA
     Created:     2020-08-12
-    Updated:     2021-04-07
+    Updated:     2026-11-27
 
     Version history:
     1.0.0 - (2020-08-12) Script created
     1.0.1 - (2020-09-15) Added a fix for registering default PSGallery repository if not already registered
     1.0.2 - (2020-09-28) Added a new parameter HPIAAction that controls whether to Download or Install applicable drivers
     1.0.3 - (2021-04-07) Replaced Get-Softpaq cmdlet with a hard-coded softpaq number with the newly added Install-HPImageAssistant cmdlet in the HPCMSL module
+    1.0.4 - (2026-11-27) Wait for the 64-bit process and pass on its exit code, read its output so it cannot block on a full buffer, and log exit code 3020 as an error
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -191,11 +192,19 @@ Process {
         # Instatiate the new 64-bit process
         $Process = [System.Diagnostics.Process]::Start($ProcessStartInfo)
 
-        # Read standard error output to determine if the 64-bit script process somehow failed
+        # Read both streams before waiting: a redirected stream that is never read can fill up and block the 64-bit process
+        $StandardOutputTask = $Process.StandardOutput.ReadToEndAsync()
         $ErrorOutput = $Process.StandardError.ReadToEnd()
+        $Process.WaitForExit()
+        $null = $StandardOutputTask.Result
+
+        # Read standard error output to determine if the 64-bit script process somehow failed
         if ($ErrorOutput) {
             Write-Error -Message $ErrorOutput
         }
+
+        # Pass on the exit code of the 64-bit script process
+        return $Process.ExitCode
     }
 
     # Stage script in system root directory for ActiveSetup
@@ -211,7 +220,8 @@ Process {
     # Check if we're running as a 64-bit process or not, if not restart as a 64-bit process
     if (-not[System.Environment]::Is64BitProcess) {
         Write-LogEntry -Value "Re-launching the PowerShell instance as a 64-bit process in Stage mode since it was originally launched as a 32-bit process" -Severity 1
-        Start-PowerShellSysNative -Arguments "-ExecutionPolicy Bypass -File $($env:SystemRoot)\Temp\$($MyInvocation.MyCommand.Name) -RunMode Stage"
+        $SysNativeExitCode = Start-PowerShellSysNative -Arguments "-ExecutionPolicy Bypass -File $($env:SystemRoot)\Temp\$($MyInvocation.MyCommand.Name) -RunMode Stage"
+        exit $SysNativeExitCode
     }
     else {
         # Validate that script is executed on HP hardware
@@ -285,7 +295,10 @@ Process {
                     try {
                         # Invoke executing script again in Execute run mode after package provider and modules have been installed/updated
                         Write-LogEntry -Value "Re-launching the PowerShell instance in Execute mode to overcome a bug with PowerShellGet" -Severity 1
-                        Start-PowerShellSysNative -Arguments "-ExecutionPolicy Bypass -File $($env:SystemRoot)\Temp\$($MyInvocation.MyCommand.Name) -RunMode Execute"
+                        $ExecuteExitCode = Start-PowerShellSysNative -Arguments "-ExecutionPolicy Bypass -File $($env:SystemRoot)\Temp\$($MyInvocation.MyCommand.Name) -RunMode Execute"
+                        if ($ExecuteExitCode -ne 0) {
+                            Write-LogEntry -Value "Script in Execute run mode failed with exit code: $($ExecuteExitCode)" -Severity 3; exit $ExecuteExitCode
+                        }
                     }
                     catch [System.Exception] {
                         Write-LogEntry -Value "Failed to restart executing script in Execute run mode. Error message: $($_.Exception.Message)" -Severity 3; exit 1
@@ -373,8 +386,7 @@ Process {
                                     Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
                                 }
                                 3020 { # One or more Softpaq's failed to install
-                                    Write-LogEntry -Value "HP Image Assistant did not install one or more softpaqs successfully, examine the Readme*.html file in: $($HPImageAssistantReportPath)" -Severity 2
-                                    Write-LogEntry -Value "HP Image Assistant returned successful exit code: $($Invocation)" -Severity 1
+                                    Write-LogEntry -Value "HP Image Assistant did not install one or more softpaqs successfully (exit code: $($Invocation)), examine the Readme*.html file in: $($HPImageAssistantReportPath)" -Severity 3
                                     Set-RegistryValue -Path "HKLM:\SOFTWARE\HP\ImageAssistant" -Name "ExecutionResult" -Value "Success" -ErrorAction Stop
                                 }
                                 default {
